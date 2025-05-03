@@ -16,16 +16,16 @@ def validate(tid):
     cur = db.execute("SELECT scanned_at FROM tickets WHERE ticket_id = ?", (tid,))
     row = cur.fetchone()
     if not row:
-        msg = "❌ Invalid ticket"
+        msg = "❌ Ungültiges Ticket."
         color = "red"
     elif row[0] is None:
         now = datetime.now()
         db.execute("UPDATE tickets SET scanned_at = ? WHERE ticket_id = ?", (now, tid))
         db.commit()
-        msg = "✅ Ticket valid. Welcome!"
+        msg = "✅ Ticket gültig!"
         color = "green"
     else:
-        msg = "❌ Ticket already used"
+        msg = "❌ Ticket bereits verwendet."
         color = "red"
     html = """
     <html><head><title>Scan Result</title></head>

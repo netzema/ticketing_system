@@ -3,20 +3,23 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from PyPDF2 import PdfReader, PdfWriter
 from config import PAGE_WIDTH, PAGE_HEIGHT, MARGIN_RIGHT, QR_SIZE
+import config
 # Paths and filenames
-TEMPLATE_PATH = "ticket_template.pdf"  # Your designer's template PDF
-QR_DIR        = "qr_codes"             # Directory containing <ticket_id>.png files
-OUTPUT_DIR    = "tickets"              # Directory where individual ticket PDFs will be saved
-OVERLAY_PDF   = "overlay.pdf"          # Temporary overlay file
+EVENT = config.EVENT
+BASE_PATH = config.BASE_PATH
+TEMPLATE_PATH = f"ticket_templates/{EVENT}.pdf"     # 
+QR_DIR        = f"{BASE_PATH}/qr_codes"             # Directory containing <ticket_id>.png files
+OUTPUT_DIR    = f"{BASE_PATH}/tickets"              # Directory where individual ticket PDFs will be saved
+OVERLAY_PDF   = f"{BASE_PATH}/overlay.pdf"          # Temporary overlay file
 
 # Ensure output directory exists
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Page size (in mm): 216 × 70 mm (landscape)
+# Page size (in mm)
 PAGE_WIDTH = PAGE_WIDTH * mm
 PAGE_HEIGHT = PAGE_HEIGHT * mm
 
-# Coordinates for QR placement on the right side (adjust as needed)
+# Coordinates for QR placement on the right side
 MARGIN_RIGHT = MARGIN_RIGHT * mm
 QR_SIZE      = QR_SIZE * mm
 # Place QR code flush to right margin, vertically centered

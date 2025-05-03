@@ -5,15 +5,35 @@ import csv
 import qrcode
 from tqdm import tqdm, trange
 import config
+import shutil
+import datetime
+import subprocess
+import sys
 
 # Configuration
-DB_PATH = "tickets.db"            # Path to SQLite database
-QR_DIR = "qr_codes"              # Directory where QR images will be saved
-CSV_PATH = "ticket_urls.csv"     # CSV file to map ticket IDs to URLs
 HOST = config.HOST # "192.168.1.18:8000" # "oktoberfest.local:8000"  # Replace with your server host and port
 N_TICKETS = config.N_TICKETS
+EVENT = config.EVENT
+BASE_PATH = config.BASE_PATH
+DB_PATH = f"{BASE_PATH}/tickets.db"           # Path to SQLite database
+QR_DIR = f"{BASE_PATH}/qr_codes"              # Directory where QR images will be saved
+CSV_PATH = f"{BASE_PATH}/ticket_urls.csv"     # CSV file to map ticket IDs to URLs
+BACKUP_ROOT = config.BACKUP_ROOT
+PDF_SCRIPT = os.path.join(os.path.dirname(__file__), "pdf_tickets.py")
+
+# Function to backup entire event folder
+def backup_event_folder(src_folder, backup_root, event_name):
+    os.makedirs(backup_root, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_name = f"{event_name}_backup_{timestamp}"
+    backup_path = os.path.join(backup_root, backup_name)
+    # Copy entire event directory tree
+    shutil.copytree(src_folder, backup_path)
+    print(f"Backup of event folder created at: {backup_path}")
 
 # Ensure output directory exists
+os.makedirs(BASE_PATH, exist_ok=True)
+os.makedirs(BACKUP_ROOT, exist_ok=True)
 os.makedirs(QR_DIR, exist_ok=True)
 
 # Initialize database and insert 1500 unique ticket IDs
@@ -63,3 +83,15 @@ with open(CSV_PATH, mode="w", newline="") as csvfile:
 print(f"Database initialized at {DB_PATH} with {N_TICKETS} tickets.")
 print(f"QR codes saved in '{QR_DIR}'.")
 print(f"Ticket-to-URL map written to '{CSV_PATH}'.")
+
+# Create pdf tickets
+# Generate ticket PDFs by invoking pdf_tickets.py
+print("Generating ticket PDF files...")
+result = subprocess.run([sys.executable, PDF_SCRIPT], check=True)
+if result.returncode == 0:
+    print("Ticket PDFs generated successfully.")
+else:
+    print("Error: PDF generation script failed.")
+
+# Backup entire event folder right after generation
+backup_event_folder(BASE_PATH, BACKUP_ROOT, EVENT)

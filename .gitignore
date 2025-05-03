@@ -1,5 +1,7 @@
+__pycache__
 .venv
-qr_codes/*
-tickets/*
 cert.pem
 key.pem
+bkp/*
+events/*
+ticket_templates/*
