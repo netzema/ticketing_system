@@ -1,0 +1,5 @@
+.venv
+qr_codes/*
+tickets/*
+cert.pem
+key.pem
