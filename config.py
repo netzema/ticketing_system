@@ -5,7 +5,8 @@ BASE_PATH = f"events/{EVENT}"
 BACKUP_ROOT = "bkp"
 
 # Netork config
-HOST = "172.20.10.8:8000"
+HOST = "192.168.1.18" # Internet Landstraße 
+# HOST = "172.20.10.8:8000" # iPhone Hotspot
 
 # Page size (in mm)
 PAGE_WIDTH = 216
