@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 # Configuration
-HOST = config.HOST # "192.168.1.18:8000" # "oktoberfest.local:8000"  # Replace with your server host and port
+HOST = config.URL # "192.168.1.18:8000" # "oktoberfest.local:8000"  # Replace with your server host and port
 N_TICKETS = config.N_TICKETS
 EVENT = config.EVENT
 BASE_PATH = config.BASE_PATH
@@ -83,6 +83,24 @@ with open(CSV_PATH, mode="w", newline="") as csvfile:
 print(f"Database initialized at {DB_PATH} with {N_TICKETS} tickets.")
 print(f"QR codes saved in '{QR_DIR}'.")
 print(f"Ticket-to-URL map written to '{CSV_PATH}'.")
+
+# Generate SSL certificate and key for HTTPS
+print("Generating SSL certificate and key...")
+host_ip = HOST.split(':')[0]
+key_path = os.path.join(BASE_PATH, 'key.pem')
+cert_path = os.path.join(BASE_PATH, 'cert.pem')
+# Call OpenSSL to create self-signed certificate
+try:
+    subprocess.run([
+        'openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+        '-keyout', key_path, '-out', cert_path,
+        '-days', '365', '-subj', f"/CN={host_ip}"
+    ], check=True, capture_output=True)
+    print(f"Generated cert.pem and key.pem at {BASE_PATH}")
+except FileNotFoundError:
+    print("Error: OpenSSL not found. Please install OpenSSL to generate certificates.")
+except subprocess.CalledProcessError as e:
+    print(f"Error generating SSL certificate: {e}")
 
 # Create pdf tickets
 # Generate ticket PDFs by invoking pdf_tickets.py

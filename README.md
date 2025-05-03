@@ -5,8 +5,7 @@ This project generates, prints, and scans tickets with QR codes. It uses Python,
 ## 1. Prerequisites
 
 * Python 3.8+ installed on Windows (64-bit).
-* Git Bash or PowerShell for OpenSSL (if using HTTPS).
-* Wi‑Fi network set to **Private** profile on Windows.
+* PowerShell with OpenSSL installed.
 * Windows Firewall: allow inbound TCP port 8000 (create an inbound rule for TCP port 8000).
 * Important: Ensure your laptop (for QR generation and server) and all scanning devices are connected to the same network during both ticket creation and validation.
 
@@ -33,13 +32,14 @@ This project generates, prints, and scans tickets with QR codes. It uses Python,
 ## 3. Generate Tickets
 
 1. Edit `config.py` and adjust the number of tickets `N_TICKET`, the name of the event `EVENT` and the paths and ticket dimensions according to your needs.
-2. Place your ticket template PDF into the `ticket_templates` folder. Make sure that the name of the template is simply the name of the event, e.g. `oktoberfest25.pdf`
-2. Run script:
+2. Place your ticket template PDF into the `ticket_templates` folder. Make sure that the name of the template matches the name of the event, e.g. `oktoberfest25.pdf`
+3. Make sure to have OpenSSL installed on your machine.
+4. Run script:
 
    ```bash
    python generate_tickets.py
    ```
-3. Check outputs in `events/{EVENT}`:
+5. Check outputs in `events/{EVENT}`:
 
    * `tickets.db` holds the predefined number of IDs.
    * `qr_codes/` contains PNGs plus `scan_page.png`.
@@ -49,15 +49,7 @@ A backup of each event is being created in `bkp/{EVENT}`.
 
 ## 4. Run the Flask Server
 
-1. Create SSL cert and key (ensure `"/CN=192.168.1.18"` matches your `HOST` in config.py):
-
-   ```bash
-   export MSYS_NO_PATHCONV=1
-   openssl req -x509 -newkey rsa:2048 -nodes \
-     -keyout key.pem -out cert.pem -days 365 \
-     -subj "/CN=192.168.1.18"
-   ```
-2. Start server with HTTPS:
+1. Start server with HTTPS:
 
    ```bash
    python app.py
@@ -68,7 +60,7 @@ A backup of each event is being created in `bkp/{EVENT}`.
    ```
    * Running on https://0.0.0.0:8000/
    ```
-3. If using `flask run`, add flags:
+2. If using `flask run`, add flags:
 
    ```bash
    flask run --host=0.0.0.0 --port=8000 --cert=cert.pem --key=key.pem

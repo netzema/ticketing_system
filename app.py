@@ -1,8 +1,9 @@
 from flask import Flask, render_template_string, render_template, g
 import sqlite3
 from datetime import datetime
+from config import BASE_PATH
 
-DB = "tickets.db"
+DB = f"{BASE_PATH}/tickets.db"
 app = Flask(__name__)
 
 def get_db():
@@ -43,5 +44,5 @@ if __name__ == "__main__":
     app.run(
       host="0.0.0.0",
       port=8000,
-      ssl_context=('cert.pem','key.pem')
+      ssl_context=(f'{BASE_PATH}/cert.pem',f'{BASE_PATH}/key.pem')
     )
