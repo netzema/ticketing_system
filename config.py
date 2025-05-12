@@ -1,7 +1,7 @@
 # Event config
 EVENT = "oktoberfest2025"
 N_TICKETS = 10
-BASE_PATH = f"events/{EVENT}"
+BASE_PATH = f"home/tickets/ticketing_system/events/{EVENT}"
 BACKUP_ROOT = "bkp"
 
 # Netork config

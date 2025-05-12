@@ -11,14 +11,14 @@ import subprocess
 import sys
 
 # Configuration from config.py
-HOST = config.URL           # e.g., "192.168.1.18:8000"
+HOST = config.URL # e.g., "192.168.1.18:8000"
 N_TICKETS = config.N_TICKETS
 EVENT = config.EVENT
 BASE_PATH = config.BASE_PATH
 DB_PATH = os.path.join(BASE_PATH, 'tickets.db')
 QR_DIR = os.path.join(BASE_PATH, 'qr_codes')
 CSV_PATH = os.path.join(BASE_PATH, 'ticket_urls.csv')
-BACKUP_ROOT = config.BACKUP_ROOT
+BACKUP_ROOT = os.path.join(BASE_PATH, config.BACKUP_ROOT)
 PDF_SCRIPT = os.path.join(os.path.dirname(__file__), 'pdf_tickets.py')
 
 # Ensure output directories exist
