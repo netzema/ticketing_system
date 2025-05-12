@@ -4,4 +4,3 @@ cert.pem
 key.pem
 bkp/*
 events/*
-ticket_templates/*
