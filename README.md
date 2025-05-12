@@ -1,119 +1,239 @@
-# Ticketing System&#x20;
 
-This project generates, prints, and scans tickets with QR codes. It uses Python, Flask, ReportLab, and PyPDF2.
+# 🎟️ Ticketing System
 
-## 1. Prerequisites
+This project generates, prints, and scans tickets with QR codes. It uses Python, Flask, ReportLab, and PyPDF2. The system is now deployable both locally and via a public server using Nginx and HTTPS.
 
-* Python 3.8+ installed on Windows (64-bit).
-* PowerShell with OpenSSL installed.
-* Windows Firewall: allow inbound TCP port 8000 (create an inbound rule for TCP port 8000).
-* Important: Ensure your laptop (for QR generation and server) and all scanning devices are connected to the same network during both ticket creation and validation.
+---
 
-## 2. Clone and Install
+## 1. Prerequisites (for Developers)
 
-1. Clone the repo into your folder:
+### 📦 Local System Requirements (for generating tickets)
 
-   ```bash
-   git clone <repo-url> ticketing_system
-   cd ticketing_system
-   ```
-2. Create and activate a virtual env:
+- Python 3.8+ installed (Windows or Linux)
+- Git and OpenSSL (for creating SSL certs if needed)
+- On Windows: allow inbound TCP port 8000 in Windows Firewall
+- Make sure all devices are connected to the **same network** when testing locally
 
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate
-   ```
-3. Install dependencies:
+### 🌐 VPS Server Requirements (for public deployment)
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+- A public VPS (e.g. Hetzner Cloud) with Ubuntu 22.04
+- A domain name (e.g. `tickets.danielnetzl.com`)
+- Domain DNS pointing to your VPS (A record)
+- `sudo` access via SSH (preferably using SSH keys)
+
+---
+
+## 2. Clone & Install (on any system)
+
+```bash
+git clone <repo-url> ticketing_system
+cd ticketing_system
+python -m venv venv
+source venv/bin/activate  # Or .venv\Scripts\activate on Windows
+pip install -r requirements.txt
+````
+
+---
 
 ## 3. Generate Tickets
 
-1. Edit `config.py` and adjust the number of tickets `N_TICKET`, the name of the event `EVENT` and the paths and ticket dimensions according to your needs.
-2. Place your ticket template PDF into the `ticket_templates` folder. Make sure that the name of the template matches the name of the event, e.g. `oktoberfest25.pdf`
-3. Make sure to have OpenSSL installed on your machine.
-4. Run script:
+1. Edit `config.py` and set:
 
-   ```bash
-   python generate_tickets.py
-   ```
-5. Check outputs in `events/{EVENT}`:
+   * `EVENT` (name of the event)
+   * `N_TICKETS`
+   * `BASE_PATH` and other layout config if needed
+   * `URL = "tickets.danielnetzl.com"` (no prefix)
 
-   * `tickets.db` holds the predefined number of IDs.
-   * `qr_codes/` contains PNGs plus `scan_page.png`.
-   * `ticket_urls.csv` maps IDs to URLs.
+2. Place your event template PDF into `ticket_templates/` named as `{EVENT}.pdf`.
 
-A backup of each event is being created in `bkp/{EVENT}`.
+3. Generate everything (QR codes, PDFs, database, backup):
 
-## 4. Run the Flask Server
+```bash
+python generate_tickets.py
+```
 
-1. Start server with HTTPS:
+🎉 This creates:
 
-   ```bash
-   python app.py
-   ```
+* `events/{EVENT}/tickets.db`
+* `qr_codes/` + `scan_page.png`
+* `ticket_urls.csv`
+* `tickets/` as printable PDFs
+* A full backup in `bkp/{EVENT}`
 
-   The console should show:
+---
 
-   ```
-   * Running on https://0.0.0.0:8000/
-   ```
-2. If using `flask run`, add flags:
+## 4. Deploy to VPS with Nginx + HTTPS
 
-   ```bash
-   flask run --host=0.0.0.0 --port=8000 --cert=cert.pem --key=key.pem
-   ```
+### 🔐 A. Set up server
+
+On your VPS:
+
+```bash
+sudo apt update
+sudo apt install nginx python3-pip python3-venv git ufw -y
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'
+sudo ufw enable
+```
+
+### 📁 B. Clone your project and set up Python
+
+```bash
+adduser tickets
+usermod -aG sudo tickets
+su - tickets
+git clone <repo> ticketing_system
+cd ticketing_system
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 🚀 C. Run the app via systemd
+
+Create `/etc/systemd/system/tickets.service`:
+
+```ini
+[Unit]
+Description=Gunicorn for Ticket App
+After=network.target
+
+[Service]
+User=tickets
+Group=www-data
+WorkingDirectory=/home/tickets/ticketing_system
+Environment="PATH=/home/tickets/ticketing_system/venv/bin"
+ExecStart=/home/tickets/ticketing_system/venv/bin/gunicorn -w 4 -b 127.0.0.1:8000 app:app
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then:
+
+```bash
+sudo systemctl daemon-reexec
+sudo systemctl enable tickets
+sudo systemctl start tickets
+```
+
+Check with:
+
+```bash
+sudo systemctl status tickets
+```
+
+---
+
+### 🌐 D. Configure Nginx
+
+Edit `/etc/nginx/sites-available/tickets`:
+
+```nginx
+server {
+    listen 80;
+    server_name tickets.danielnetzl.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+Then:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/tickets /etc/nginx/sites-enabled/
+sudo rm /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+---
+
+### 🔒 E. Enable HTTPS with Let's Encrypt
+
+```bash
+sudo apt install certbot python3-certbot-nginx -y
+sudo certbot --nginx
+```
+
+Choose to redirect HTTP to HTTPS when prompted.
+
+Now your app is securely available at:
+
+```
+https://tickets.danielnetzl.com/scan
+```
+
+---
 
 ## 5. Scanner Webpage
 
-* URL: `https://192.168.1.18:8000/scan`. A separate QR code for accessing this web page is being created in `events/{EVENT}/qr_codes`.
-* Page uses live camera and ZXing JS to decode QR.
-* Message appears large at center.
-* 3 seconds delay between scans.
+* URL: `https://tickets.danielnetzl.com/scan`
+* QR code for this page is saved as `scan_page.png`
+* Uses live camera access (requires HTTPS)
+* 3-second delay between scans to avoid double scans
 
-## 6. User Instructions
+---
 
-1. Connect to the **Private** Wi‑Fi (not a guest network).
-2. Open your browser (preferably Safari) and go to the scan URL.
-3. Accept the self-signed certificate (click **Erweitert → Trotzdem fortfahren**).
-4. Allow all required permissions, including the page to use the camera.
-5. Do not close the browser tab while scanning.
-6. If you accidentally close it, clear site data and cache:
+## 6. Instructions for Entrance Staff
 
-   * In browser settings: **Cookies & Websitedaten**, **Cache** → **Löschen**.
-7. Re-open the scan URL and allow camera.
+This guide is for staff scanning tickets on phones/tablets.
 
-## 7. Troubleshooting
+### ✅ Setup
 
-* **Server unreachable**: check LAN IP, firewall, port-forwarding, AP isolation. Try clear the site and data cache of your browser as described in 7.6.
-* **Camera not available**: ensure HTTPS, clear old cache, disable ad‑blocker.
-* **First scan works, then fails**: use the continuous-scan page; do not rely on built‑in camera app handoff.
-* **Internal Server Error**: Ask Daniel for help. Something might be wrong with the code.
+1. **Use Safari (iOS)** or **Chrome (Android)**. Ecosia, Firefox, DuckDuckGo won’t work.
+2. Connect to mobile data or event Wi-Fi.
+3. Scan the `scan_page.png` QR code and open the link in Safari/Chrome.
+4. When prompted:
 
-## 8. Entrance Staff User Manual
+   * Allow camera access
+   * Accept HTTPS certificate (if needed)
 
-This guide is for staff at the event entrance. Follow these steps to scan and validate tickets smoothly.
+> Tip: Tap **Share → Zum Home-Bildschirm** to pin it as a full-screen app.
 
-1. **Prepare your device**:
-   * Make sure your phone or tablet is connected to the event Wi‑Fi.
-   * Scan the `scan_page.png` QR Code and open the web page in your browser (preferable Safari). You can find this QR code in `events/{EVENT_NAME}/qr_codes`.
-   * Keep this tab open; do not close or reload it during the event. In case you close and it does not re-open, clear your browser's data (history and cache).
-2. **Grant permissions**:
-   * When prompted, accept the security warning for the certificate.
-   * Allow the page to access your device camera.
-3. **Start scanning**:
-   * Point the live camera view at the guest’s QR code.
-   * The page will automatically detect the code and display a large message:
-   * Green text: “Ticket gültig” → Allow entry.
-   * Red text: “Ticket bereits verwendet” or “Ungültiges Ticket” → Deny entry.
-4. **Observe buffer time**:
-   * After a scan, wait for the message to revert (“Scannen Sie Ihr Ticket”) before scanning the next ticket—about 3 seconds.
-5. **Troubleshoot on the spot**:
-   * If the page freezes or camera stops: clear this tab’s cache only (in browser settings), then re-open the scan URL.
-   * If a QR won’t scan: ensure the code is fully visible and well‑lit; tilt device slightly to reduce glare.
-   * For any other issue, contact the technical supervisor immediately.
-6. **End of shift**:
-   * At the end of the event, leave the scan page open until all guests have entered.
-   * Do not close the tab until scanning is complete.
+---
+
+### 🎯 During the Event
+
+* Hold the QR code clearly in the camera frame
+* A message will appear:
+
+  * ✅ **Ticket gültig** → allow entry
+  * ❌ **Bereits verwendet** → reject
+  * ❌ **Ungültig** → reject
+* Wait 3 seconds before the next scan
+
+---
+
+### 🛠 Troubleshooting
+
+* **Camera not available**: Make sure you use Safari or Chrome + HTTPS
+* **Scan not detected**: Check lighting, glare, or focus
+* **Tab closes**: Re-open the scan URL, clear browser cache if needed
+
+---
+
+## 7. Developer Notes
+
+* Run `python generate_tickets.py` whenever you want to:
+
+  * Create a new event
+  * Regenerate QR codes
+* All output is placed under `events/{EVENT}` and backed up
+* The app auto-loads the correct database for the current event
+
+---
+
+## ✅ You're all set!
+
+Access:
+
+```
+https://tickets.danielnetzl.com/scan
+```
+
+Support: Ask Daniel if anything breaks.
