@@ -1,10 +1,11 @@
 from flask import Flask, render_template_string, render_template, g
 import sqlite3
 from datetime import datetime
-from config import BASE_PATH, PORT
+from config import BASE_PATH, PORT, URL, HOST
 
 DB = f"{BASE_PATH}/tickets.db"
-app = Flask(__name__)
+app = Flask(__name__) #, static_url_path='/oktoberfest25/static')
+
 
 def get_db():
     if "db" not in g:
@@ -58,7 +59,7 @@ def scan():
 
 if __name__ == "__main__":
     app.run(
-      host="0.0.0.0",
+      host=URL,
       port=int(PORT),
       ssl_context=(f'{BASE_PATH}/cert.pem',f'{BASE_PATH}/key.pem')
     )
