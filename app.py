@@ -1,8 +1,11 @@
-from flask import Flask, render_template_string, render_template, g
+from flask import Flask, render_template_string, render_template, g, request, abort
 import sqlite3
 from datetime import datetime
 from config import BASE_PATH, PORT, URL, HOST
+from dotenv import load_dotenv
+import os
 
+print(load_dotenv())
 DB = f"{BASE_PATH}/tickets.db"
 app = Flask(__name__) #, static_url_path='/oktoberfest25/static')
 
@@ -51,6 +54,17 @@ def validate(tid):
     </html>
     """
     return render_template_string(html, msg=msg, color=color, count=count)
+
+@app.route("/reset")
+def reset_tickets():
+    key = request.args.get("key")
+    if key != os.getenv("RESET_SECRET"):
+        abort(403)
+
+    db = get_db()
+    db.execute("UPDATE tickets SET scanned_at = NULL")
+    db.commit()
+    return "<h2 style='color:green;text-align:center'>✅ All tickets have been reset.</h2>"
 
 @app.route("/scan")
 def scan():
