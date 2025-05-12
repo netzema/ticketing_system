@@ -18,7 +18,7 @@ BASE_PATH = config.BASE_PATH
 DB_PATH = os.path.join(BASE_PATH, 'tickets.db')
 QR_DIR = os.path.join(BASE_PATH, 'qr_codes')
 CSV_PATH = os.path.join(BASE_PATH, 'ticket_urls.csv')
-BACKUP_ROOT = os.path.join(BASE_PATH, config.BACKUP_ROOT)
+BACKUP_ROOT = os.path.join(config.BACKUP_ROOT)
 PDF_SCRIPT = os.path.join(os.path.dirname(__file__), 'pdf_tickets.py')
 
 # Ensure output directories exist

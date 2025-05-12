@@ -11,6 +11,10 @@ def get_db():
         g.db = sqlite3.connect(DB)
     return g.db
 
+@app.route("/")
+def home():
+    return render_template("index.html")
+
 @app.route("/validate/<tid>")
 def validate(tid):
     db = get_db()
