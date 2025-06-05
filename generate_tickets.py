@@ -107,15 +107,15 @@ except subprocess.CalledProcessError as e:
     print(f"Error generating SSL certificate: {e}")
 
 # Generate ticket PDFs
-def run_pdf_script():
-    print("Generating ticket PDF files...")
-    result = subprocess.run([sys.executable, PDF_SCRIPT], check=False)
-    if result.returncode == 0:
-        print("Ticket PDFs generated successfully.")
-    else:
-        print("Error: PDF generation script failed.")
+# def run_pdf_script():
+#     print("Generating ticket PDF files...")
+#     result = subprocess.run([sys.executable, PDF_SCRIPT], check=False)
+#     if result.returncode == 0:
+#         print("Ticket PDFs generated successfully.")
+#     else:
+#         print("Error: PDF generation script failed.")
 
-run_pdf_script()
+# run_pdf_script()
 
 # Backup entire event folder
 def backup_event_folder(src_folder, backup_root, event_name):
