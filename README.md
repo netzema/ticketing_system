@@ -5,7 +5,55 @@ This project generates, prints, and scans tickets with QR codes. It uses Python,
 
 ---
 
-## 1. Prerequisites (for Developers)
+## Objective
+
+* Automate creation of event tickets with unique QR codes.
+* Provide a secure local validation system accessible via mobile devices.
+* Ensure smooth scanning and validation at event entrances without relying on third-party services.
+
+## Methodology
+
+* **Ticket generation**:
+
+  * Configurable event name and number of tickets in `config.py`.
+  * Templates defined as PDFs, overlaid with unique QR codes.
+  * Ticket data stored in SQLite (`tickets.db`), with backup for each event.
+* **Validation server**:
+
+  * Flask app with HTTPS (self-signed certificates).
+  * Endpoints to validate tickets in real-time.
+  * Automatic logging of scans and status updates.
+* **Scanning page**:
+
+  * Accessible via QR code linking to `https://<server-ip>:8000/scan`.
+  * Uses ZXing JS for live camera decoding.
+  * Displays clear status messages (valid, already used, invalid).
+  * 3-second buffer between scans.
+
+## Usage Workflow
+
+1. **Generate tickets**
+
+   * Edit `config.py` (event name, ticket count, template path).
+   * Run `python generate_tickets.py`.
+   * Outputs: tickets with QR codes, database, and CSV with ticket URLs.
+
+2. **Start validation server**
+
+   * Run `python app.py` (or `flask run` with certificate and key).
+   * Server available at `https://<LAN-IP>:8000/`.
+
+3. **Scan tickets**
+
+   * Staff connect to event Wi-Fi, open scan QR code in browser.
+   * Accept certificate and allow camera access.
+   * Page shows validation result in large colored text.
+
+---
+
+# For Developers
+
+## 1. Prerequisites
 
 ### 📦 Local System Requirements (for generating tickets)
 
