@@ -1,5 +1,5 @@
 
-# 🎟️ Ticketing System
+# Ticketing System
 
 This project generates, prints, and scans tickets with QR codes. It uses Python, Flask, ReportLab, and PyPDF2. The system is now deployable both locally and via a public server using Nginx and HTTPS.
 
@@ -55,14 +55,14 @@ This project generates, prints, and scans tickets with QR codes. It uses Python,
 
 ## 1. Prerequisites
 
-### 📦 Local System Requirements (for generating tickets)
+### Local System Requirements (for generating tickets)
 
 - Python 3.8+ installed (Windows or Linux)
 - Git and OpenSSL (for creating SSL certs if needed)
 - On Windows: allow inbound TCP port 8000 in Windows Firewall
 - Make sure all devices are connected to the **same network** when testing locally
 
-### 🌐 VPS Server Requirements (for public deployment)
+### VPS Server Requirements (for public deployment)
 
 - A public VPS (e.g. Hetzner Cloud) with Ubuntu 22.04
 - A domain name (e.g. `tickets.danielnetzl.com`)
@@ -100,7 +100,7 @@ pip install -r requirements.txt
 python generate_tickets.py
 ```
 
-🎉 This creates:
+This creates:
 
 * `events/{EVENT}/tickets.db`
 * `qr_codes/` + `scan_page.png`
@@ -112,7 +112,7 @@ python generate_tickets.py
 
 ## 4. Deploy to VPS with Nginx + HTTPS
 
-### 🔐 A. Set up server
+### A. Set up server
 
 On your VPS:
 
@@ -124,7 +124,7 @@ sudo ufw allow 'Nginx Full'
 sudo ufw enable
 ```
 
-### 📁 B. Clone your project and set up Python
+### B. Clone your project and set up Python
 
 ```bash
 adduser tickets
@@ -137,7 +137,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 🚀 C. Run the app via systemd
+### C. Run the app via systemd
 
 Create `/etc/systemd/system/tickets.service`:
 
@@ -173,7 +173,7 @@ sudo systemctl status tickets
 
 ---
 
-### 🌐 D. Configure Nginx
+### D. Configure Nginx
 
 Edit `/etc/nginx/sites-available/tickets`:
 
@@ -201,7 +201,7 @@ sudo systemctl reload nginx
 
 ---
 
-### 🔒 E. Enable HTTPS with Let's Encrypt
+### E. Enable HTTPS with Let's Encrypt
 
 ```bash
 sudo apt install certbot python3-certbot-nginx -y
@@ -231,9 +231,9 @@ https://tickets.danielnetzl.com/scan
 
 This guide is for staff scanning tickets on phones/tablets.
 
-### ✅ Setup
+### Setup
 
-1. **Use Safari (iOS)** or **Chrome (Android)**. Ecosia, Firefox, DuckDuckGo won’t work.
+1. Use any browser except Ecosia (won't allow camera access).
 2. Connect to mobile data or event Wi-Fi.
 3. Scan the `scan_page.png` QR code and open the link in Safari/Chrome.
 4. When prompted:
@@ -245,7 +245,7 @@ This guide is for staff scanning tickets on phones/tablets.
 
 ---
 
-### 🎯 During the Event
+### During the Event
 
 * Hold the QR code clearly in the camera frame
 * A message will appear:
@@ -276,7 +276,7 @@ This guide is for staff scanning tickets on phones/tablets.
 
 ---
 
-## ✅ You're all set!
+## You're all set!
 
 Access:
 
