@@ -10,7 +10,7 @@ import datetime
 import subprocess
 import sys
 
-# Configuration from config.py
+# configuration from config.py
 HOST = config.URL # e.g., "192.168.1.18:8000"
 N_TICKETS = config.N_TICKETS
 EVENT = config.EVENT
@@ -21,12 +21,12 @@ CSV_PATH = os.path.join(BASE_PATH, 'ticket_urls.csv')
 BACKUP_ROOT = os.path.join(config.BACKUP_ROOT)
 PDF_SCRIPT = os.path.join(os.path.dirname(__file__), 'pdf_tickets.py')
 
-# Ensure output directories exist
+# ensure output directories exist
 os.makedirs(BASE_PATH, exist_ok=True)
 os.makedirs(BACKUP_ROOT, exist_ok=True)
 os.makedirs(QR_DIR, exist_ok=True)
 
-# Initialize database
+# initialize database
 conn = sqlite3.connect(DB_PATH)
 c = conn.cursor()
 c.execute("DROP TABLE IF EXISTS tickets")
@@ -39,7 +39,7 @@ c.execute(
     """
 )
 
-# Generate and store ticket IDs
+# generate and store ticket IDs
 ticket_ids = []
 print("Saving tickets to database...")
 for _ in trange(N_TICKETS):
@@ -49,7 +49,7 @@ for _ in trange(N_TICKETS):
 conn.commit()
 conn.close()
 
-# Generate QR codes and CSV mapping
+# generate QR codes and CSV mapping
 with open(CSV_PATH, mode='w', newline='', encoding='utf-8') as csvfile:
     writer = csv.writer(csvfile)
     writer.writerow(['ticket_id', 'url'])
@@ -59,7 +59,7 @@ with open(CSV_PATH, mode='w', newline='', encoding='utf-8') as csvfile:
         url = f"https://{HOST}/validate/{tid}"
         writer.writerow([tid, url])
 
-        # Create a QRCode object without border
+        # create a QRCode object without border
         qr = qrcode.QRCode(
             version=None,
             error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -72,7 +72,7 @@ with open(CSV_PATH, mode='w', newline='', encoding='utf-8') as csvfile:
         img_path = os.path.join(QR_DIR, f"{tid}.png")
         img.save(img_path)
 
-    # Add scan page QR code
+    # add scan page QR code
     scan_url = f"https://{HOST}/scan"
     writer.writerow(['scan_page', scan_url])
     qr = qrcode.QRCode(
@@ -89,7 +89,7 @@ with open(CSV_PATH, mode='w', newline='', encoding='utf-8') as csvfile:
 print(f"Database initialized at {DB_PATH} with {len(ticket_ids)} tickets.")
 print(f"QR codes saved in '{QR_DIR}'. CSV written to '{CSV_PATH}'.")
 
-# Generate SSL certificate and key
+# generate SSL certificate and key
 print("Generating SSL certificate and key...")
 host_ip = HOST.split(':')[0]
 key_path = os.path.join(BASE_PATH, 'key.pem')
@@ -106,7 +106,7 @@ except FileNotFoundError:
 except subprocess.CalledProcessError as e:
     print(f"Error generating SSL certificate: {e}")
 
-# Generate ticket PDFs
+# generate ticket PDFs
 # def run_pdf_script():
 #     print("Generating ticket PDF files...")
 #     result = subprocess.run([sys.executable, PDF_SCRIPT], check=False)
@@ -117,7 +117,7 @@ except subprocess.CalledProcessError as e:
 
 # run_pdf_script()
 
-# Backup entire event folder
+# backup entire event folder
 def backup_event_folder(src_folder, backup_root, event_name):
     os.makedirs(backup_root, exist_ok=True)
     timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')

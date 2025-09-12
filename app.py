@@ -25,7 +25,7 @@ def validate(tid):
     cur = db.execute("SELECT scanned_at FROM tickets WHERE ticket_id = ?", (tid,))
     row = cur.fetchone()
 
-    count = None  # default: don’t show it
+    count = None  # default: don’t show
     if not row:
         msg = "❌ Ungültiges Ticket."
         color = "red"
@@ -68,7 +68,6 @@ def reset_tickets():
 
 @app.route("/scan")
 def scan():
-    # Renders the scan.html template
     return render_template("scan.html")
 
 if __name__ == "__main__":

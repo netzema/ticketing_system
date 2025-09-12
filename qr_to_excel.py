@@ -7,22 +7,22 @@ from config import EVENT, BASE_PATH
 QR_DIR = os.path.join(BASE_PATH, "qr_codes")
 OUTPUT_PATH = os.path.join(BASE_PATH, f"{EVENT}_qr_codes.xlsx")
 
-# Excel layout constants
-IMG_DISPLAY_SIZE = 80   # in pixels
-ROW_HEIGHT = 100        # Excel row height is in points (~0.75 pixels)
+# excel layout constants
+IMG_DISPLAY_SIZE = 80 # in pixels
+ROW_HEIGHT = 100 # Excel row height in points (~0.75 pixels)
 
-# Create workbook
+# create workbook
 wb = Workbook()
 ws = wb.active
 ws.title = "QR Codes"
 ws.append(["Ticket ID"]) #, "QR Code"])
-ws.row_dimensions[1].height = 20  # Header row
+ws.row_dimensions[1].height = 20  # header row
 
-# Adjust column widths
+# adjust column widths
 ws.column_dimensions["A"].width = 40
 # ws.column_dimensions["B"].width = 18
 
-# Process each QR image
+# process each QR image
 row = 2
 for fname in sorted(os.listdir(QR_DIR)):
     if not fname.endswith(".png") or fname == "scan_page.png":
@@ -31,10 +31,10 @@ for fname in sorted(os.listdir(QR_DIR)):
     ticket_id = os.path.splitext(fname)[0]
     original_path = os.path.join(QR_DIR, fname)
 
-    # Adjust row height
+    # adjust row height
     # ws.row_dimensions[row].height = ROW_HEIGHT
 
-    # Insert text and image
+    # insert text and image
     ws.cell(row=row, column=1, value=ticket_id)
     # qr_img = XLImage(original_path)
     # qr_img.width = IMG_DISPLAY_SIZE
@@ -44,6 +44,6 @@ for fname in sorted(os.listdir(QR_DIR)):
 
     row += 1
 
-# Save workbook
+# save workbook
 wb.save(OUTPUT_PATH)
 print(f"✅ Excel file created: {OUTPUT_PATH}")

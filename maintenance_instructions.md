@@ -1,9 +1,9 @@
 
-# ✅ Deployment Manual for a New Ticketing Event
+# Deployment Manual for a New Ticketing Event
 
 ---
 
-### 🧠 1. Log into the Server with VS Code
+### 1. Log into the Server with VS Code
 
 1. Open **VS Code**
 2. Use the **Remote SSH** extension to connect via:
@@ -19,7 +19,7 @@
 
 ---
 
-### 🛠 2. Update the `config.py`
+### 2. Update the `config.py`
 
 In VS Code:
 
@@ -33,7 +33,7 @@ In VS Code:
 
 ---
 
-### 📦 3. Generate New Tickets
+### 3. Generate New Tickets
 
 In VS Code terminal:
 
@@ -54,7 +54,7 @@ This will:
 
 ---
 
-### 🔐 4. Get Sudo Access to Restart the App
+### 4. Get Sudo Access to Restart the App
 
 1. In case you are in the terminal, log out of `tickets` user:
 
@@ -88,7 +88,7 @@ Active: active (running)
 
 ---
 
-### 🌐 5. Test the New Event
+### 5. Test the New Event
 
 Open:
 
