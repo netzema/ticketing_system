@@ -1,9 +1,7 @@
 import polars as pl
 import sqlite3
-from datetime import datetime
-from config import BASE_PATH, PORT, URL, HOST
+from config import BASE_PATH
 from dotenv import load_dotenv
-import os
 
 print(load_dotenv())
 DB = f"{BASE_PATH}/tickets.db"
