@@ -5,21 +5,64 @@
   <title>Ticket-Scanner</title>
   <style>
     body { margin:0; font-family:sans-serif; text-align:center; background:#000; color:#fff; }
-    video { width:100%; height:auto; }
-    #msg {
+    #scanner { position:relative; display:inline-block; width:100%; overflow:hidden; }
+    video { display:block; width:100%; height:auto; }
+    #scan-window {
       position:absolute;
       top:50%;
       left:50%;
+      width:min(68vw, 360px);
+      aspect-ratio:1;
       transform:translate(-50%, -50%);
-      font-size:3em;
-      padding:0.5em 1em;
+      border:4px solid #fff;
+      border-radius:18px;
+      box-sizing:border-box;
+      box-shadow:0 0 0 9999px rgba(0,0,0,0.58);
+      pointer-events:none;
+    }
+    #scan-window::after {
+      content:"";
+      position:absolute;
+      left:8%;
+      right:8%;
+      top:50%;
+      height:2px;
+      background:#e53935;
+      box-shadow:0 0 8px #e53935;
+    }
+    #hint {
+      position:absolute;
+      left:0;
+      right:0;
+      bottom:4%;
+      z-index:2;
+      padding:0 1rem;
+      font-size:1.05rem;
+      text-shadow:0 1px 4px #000;
+      pointer-events:none;
+    }
+    #msg {
+      position:fixed;
+      left:50%;
+      bottom:1rem;
+      z-index:3;
+      transform:translateX(-50%);
+      width:calc(100% - 3rem);
+      max-width:560px;
+      font-size:1.35rem;
+      padding:0.65em 1em;
       background:rgba(0,0,0,0.7);
       border-radius:0.5em;
+      box-sizing:border-box;
     }
   </style>
 </head>
 <body>
-  <video id="video" autoplay playsinline></video>
+  <div id="scanner">
+    <video id="video" autoplay playsinline></video>
+    <div id="scan-window"></div>
+    <div id="hint">QR-Code vollständig in den Rahmen halten</div>
+  </div>
   <div id="msg">Kamera wird gestartet…</div>
 
   <!-- ZXing QR-Library -->
@@ -27,12 +70,35 @@
   <script>
     const msg = document.getElementById("msg");
     const video = document.getElementById("video");
+    const scanWindow = document.getElementById("scan-window");
     const codeReader = new ZXing.BrowserQRCodeReader();
     let scanningEnabled = false;
 
+    // Only accept a QR code when all detected corner points are inside the
+    // visible scan window. ZXing reports points in the video's native pixels,
+    // so map them to the video's displayed position first.
+    function isInsideScanWindow(result) {
+      const points = result.getResultPoints ? result.getResultPoints() : [];
+      if (!points || points.length < 3 || !video.videoWidth || !video.videoHeight) {
+        return false;
+      }
+
+      const videoRect = video.getBoundingClientRect();
+      const windowRect = scanWindow.getBoundingClientRect();
+
+      return points.every(point => {
+        const x = typeof point.getX === "function" ? point.getX() : point.x;
+        const y = typeof point.getY === "function" ? point.getY() : point.y;
+        const screenX = videoRect.left + (x / video.videoWidth) * videoRect.width;
+        const screenY = videoRect.top + (y / video.videoHeight) * videoRect.height;
+        return screenX >= windowRect.left && screenX <= windowRect.right &&
+               screenY >= windowRect.top && screenY <= windowRect.bottom;
+      });
+    }
+
     // Start camera and scanning
     codeReader.decodeFromVideoDevice(null, video, (result, err) => {
-      if (result && scanningEnabled) {
+      if (result && scanningEnabled && isInsideScanWindow(result)) {
         scanningEnabled = false;
         const parts = result.text.split("/");
         const ticketId = parts[parts.length - 1];
