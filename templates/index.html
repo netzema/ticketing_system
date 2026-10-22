@@ -2,12 +2,64 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>Ticket-Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1b11">
+  <title>Oktoberfest 2026 · Jugend Göttlesbrunn</title>
   <style>
-    body { margin:0; font-family:sans-serif; text-align:center;}
+    * { box-sizing:border-box; }
+    body {
+      display:grid;
+      min-height:100vh;
+      min-height:100dvh;
+      margin:0;
+      place-items:center;
+      padding:24px;
+      background:radial-gradient(circle at 50% 20%, #23452e 0, #0b1b11 48%, #061009 100%);
+      color:#fff;
+      font-family:Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      text-align:center;
+    }
+    main { width:min(100%, 440px); }
+    .logo {
+      display:flex;
+      width:190px;
+      min-height:66px;
+      margin:0 auto 30px;
+      align-items:center;
+      padding:11px 16px;
+      border-radius:16px;
+      background:rgba(255,255,255,.96);
+      box-shadow:0 14px 38px rgba(0,0,0,.24);
+    }
+    .logo img { display:block; width:100%; height:auto; }
+    .eyebrow { color:#79e39f; font-size:.78rem; font-weight:760; letter-spacing:.13em; text-transform:uppercase; }
+    h1 { margin:10px 0 12px; font-size:clamp(2rem, 8vw, 3.1rem); line-height:1.03; letter-spacing:-.035em; }
+    p { margin:0 auto 30px; color:rgba(255,255,255,.7); font-size:1rem; line-height:1.55; }
+    a {
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:58px;
+      border-radius:16px;
+      background:#fff;
+      color:#092011;
+      font-size:1.05rem;
+      font-weight:800;
+      text-decoration:none;
+      box-shadow:0 14px 36px rgba(0,0,0,.28);
+    }
+    a:active { transform:translateY(1px); }
+    small { display:block; margin-top:18px; color:rgba(255,255,255,.45); }
   </style>
 </head>
 <body>
-  <div>Wilkommen zum Oktoberfest 2026 der Jugend Göttlesbrunn! Bitte navigiere zu /scan, um die app zu starten.</div>
+  <main>
+    <div class="logo"><img src="/static/netzl-logo.svg" alt="Netzl Data Solutions"></div>
+    <div class="eyebrow">Jugend Göttlesbrunn</div>
+    <h1>Oktoberfest 2026</h1>
+    <p>Hier geht es direkt zur Ticketkontrolle am Eingang.</p>
+    <a href="/scan">Scanner öffnen&nbsp; →</a>
+    <small>Kamera-Zugriff wird erst im Scanner benötigt.</small>
+  </main>
 </body>
 </html>
