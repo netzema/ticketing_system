@@ -2,81 +2,257 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>Ticket-Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07110b">
+  <title>Ticket-Scanner · Jugend Göttlesbrunn</title>
   <style>
-    body { margin:0; font-family:sans-serif; text-align:center; background:#000; color:#fff; }
-    #scanner { position:relative; display:inline-block; width:100%; overflow:hidden; }
-    video { display:block; width:100%; height:auto; }
-    #scan-window {
+    :root {
+      color-scheme:dark;
+      --green:#38d878;
+      --red:#ff5d5d;
+      --amber:#ffc857;
+      --panel:rgba(8, 15, 11, 0.86);
+    }
+
+    * { box-sizing:border-box; }
+    html, body { width:100%; min-height:100%; }
+    body {
+      margin:0;
+      overflow:hidden;
+      background:#07110b;
+      color:#fff;
+      font-family:Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+
+    #scanner {
+      position:fixed;
+      inset:0;
+      min-height:100vh;
+      min-height:100dvh;
+      overflow:hidden;
+      background:
+        radial-gradient(circle at 50% 42%, #21372a 0, #0a160f 58%, #050906 100%);
+    }
+
+    video {
       position:absolute;
-      top:50%;
-      left:50%;
-      width:min(76vw, 420px);
-      aspect-ratio:1;
-      transform:translate(-50%, -50%);
-      border:4px solid #fff;
-      border-radius:18px;
-      box-sizing:border-box;
-      box-shadow:0 0 0 9999px rgba(0,0,0,0.58);
+      inset:0;
+      display:block;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      background:#07110b;
+    }
+
+    video::-webkit-media-controls,
+    video::-webkit-media-controls-panel,
+    video::-webkit-media-controls-play-button,
+    video::-webkit-media-controls-start-playback-button {
+      display:none !important;
+      -webkit-appearance:none;
+    }
+
+    #shade {
+      position:absolute;
+      inset:0;
+      background:linear-gradient(180deg, rgba(0,0,0,.56) 0%, rgba(0,0,0,.05) 27%, rgba(0,0,0,.08) 65%, rgba(0,0,0,.68) 100%);
       pointer-events:none;
     }
+
+    #brand {
+      position:fixed;
+      z-index:4;
+      top:max(18px, env(safe-area-inset-top));
+      left:20px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      text-align:left;
+      text-shadow:0 1px 10px rgba(0,0,0,.8);
+      pointer-events:none;
+    }
+
+    .brand-logo {
+      display:flex;
+      width:118px;
+      height:40px;
+      align-items:center;
+      padding:6px 10px;
+      border:1px solid rgba(255,255,255,.22);
+      border-radius:11px;
+      background:rgba(255,255,255,.94);
+      box-shadow:0 5px 18px rgba(0,0,0,.2);
+    }
+
+    .brand-logo img { display:block; width:100%; height:auto; }
+    .brand-name { font-size:.8rem; font-weight:720; line-height:1.05; }
+    .brand-event {
+      display:block;
+      margin-top:4px;
+      color:rgba(255,255,255,.72);
+      font-size:.69rem;
+      font-weight:620;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+
+    #scan-window {
+      position:absolute;
+      top:47%;
+      left:50%;
+      width:min(88vw, 62dvh, 480px);
+      aspect-ratio:1;
+      transform:translate(-50%, -50%);
+      border:2px solid rgba(255,255,255,.88);
+      border-radius:24px;
+      box-shadow:
+        0 0 0 9999px rgba(0,0,0,.48),
+        0 10px 45px rgba(0,0,0,.28),
+        inset 0 0 0 1px rgba(0,0,0,.1);
+      transition:border-color .18s ease, box-shadow .18s ease;
+      pointer-events:none;
+    }
+
+    #scan-window::before,
     #scan-window::after {
       content:"";
       position:absolute;
-      left:8%;
-      right:8%;
-      top:50%;
-      height:2px;
-      background:#e53935;
-      box-shadow:0 0 8px #e53935;
+      width:54px;
+      height:54px;
+      border-color:#fff;
+      border-style:solid;
     }
+
+    #scan-window::before {
+      top:-4px;
+      left:-4px;
+      border-width:5px 0 0 5px;
+      border-radius:25px 0 0 0;
+    }
+
+    #scan-window::after {
+      right:-4px;
+      bottom:-4px;
+      border-width:0 5px 5px 0;
+      border-radius:0 0 25px 0;
+    }
+
+    #scan-window.valid {
+      border-color:var(--green);
+      box-shadow:0 0 0 9999px rgba(0,0,0,.54), 0 0 34px rgba(56,216,120,.48);
+    }
+
+    #scan-window.invalid {
+      border-color:var(--red);
+      box-shadow:0 0 0 9999px rgba(0,0,0,.54), 0 0 34px rgba(255,93,93,.42);
+    }
+
     #hint {
       position:absolute;
-      left:0;
-      right:0;
-      bottom:4%;
-      z-index:2;
-      padding:0 1rem;
-      font-size:1.05rem;
-      text-shadow:0 1px 4px #000;
-      pointer-events:none;
-    }
-    #msg {
-      position:fixed;
+      top:calc(100% + 14px);
       left:50%;
-      bottom:1rem;
-      z-index:3;
+      width:max-content;
+      max-width:88vw;
       transform:translateX(-50%);
-      width:calc(100% - 3rem);
-      max-width:560px;
-      font-size:1.35rem;
-      padding:0.65em 1em;
-      background:rgba(0,0,0,0.7);
-      border-radius:0.5em;
-      box-sizing:border-box;
+      color:rgba(255,255,255,.88);
+      font-size:.96rem;
+      font-weight:650;
+      letter-spacing:.01em;
+      text-shadow:0 2px 12px #000;
+    }
+
+    #status {
+      position:fixed;
+      z-index:5;
+      left:50%;
+      bottom:max(18px, env(safe-area-inset-bottom));
+      display:flex;
+      align-items:center;
+      gap:12px;
+      width:calc(100% - 32px);
+      max-width:540px;
+      min-height:68px;
+      padding:12px 16px;
+      transform:translateX(-50%);
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:18px;
+      background:var(--panel);
+      box-shadow:0 12px 34px rgba(0,0,0,.3);
+      text-align:left;
+      backdrop-filter:blur(16px);
+    }
+
+    #status-icon {
+      display:grid;
+      flex:0 0 38px;
+      place-items:center;
+      width:38px;
+      height:38px;
+      border-radius:50%;
+      background:rgba(255,255,255,.1);
+      font-size:1.15rem;
+      font-weight:900;
+    }
+
+    #status-copy { min-width:0; }
+    #status-title { display:block; font-size:1.05rem; font-weight:780; line-height:1.15; }
+    #status-detail { display:block; margin-top:4px; color:rgba(255,255,255,.68); font-size:.79rem; line-height:1.2; }
+    #status.valid #status-icon { background:var(--green); color:#062612; }
+    #status.invalid #status-icon { background:var(--red); color:#310707; }
+    #status.warning #status-icon { background:var(--amber); color:#302000; }
+
+    @media (max-height:620px) {
+      #brand { top:10px; transform:scale(.9); transform-origin:left top; }
+      #scan-window { top:44%; width:min(76vw, 58dvh, 420px); }
+      #hint { font-size:.82rem; }
+      #status { min-height:58px; padding:9px 13px; }
     }
   </style>
 </head>
 <body>
-  <div id="scanner">
-    <video id="video" autoplay playsinline></video>
-    <div id="scan-window"></div>
-    <div id="hint">QR-Code vollständig in den Rahmen halten</div>
-  </div>
-  <div id="msg">Kamera wird gestartet…</div>
+  <header id="brand" aria-label="Netzl Data Solutions · Jugend Göttlesbrunn">
+    <span class="brand-logo"><img src="/static/netzl-logo.svg" alt="Netzl Data Solutions"></span>
+    <span class="brand-name">Einlass<span class="brand-event">Oktoberfest 2026</span></span>
+  </header>
 
-  <!-- ZXing QR-Library -->
+  <main id="scanner">
+    <video id="video" autoplay muted playsinline disablepictureinpicture controlslist="nodownload noplaybackrate nofullscreen"></video>
+    <div id="shade"></div>
+    <div id="scan-window">
+      <div id="hint">QR-Code in den Rahmen halten</div>
+    </div>
+  </main>
+
+  <div id="status" role="status" aria-live="assertive">
+    <span id="status-icon" aria-hidden="true">…</span>
+    <span id="status-copy">
+      <strong id="status-title">Kamera wird gestartet</strong>
+      <small id="status-detail">Bitte Kamerazugriff erlauben</small>
+    </span>
+  </div>
+
   <script src="https://unpkg.com/@zxing/library@0.18.6/umd/index.min.js"></script>
   <script>
-    const msg = document.getElementById("msg");
     const video = document.getElementById("video");
     const scanWindow = document.getElementById("scan-window");
+    const status = document.getElementById("status");
+    const statusIcon = document.getElementById("status-icon");
+    const statusTitle = document.getElementById("status-title");
+    const statusDetail = document.getElementById("status-detail");
     const codeReader = new ZXing.BrowserQRCodeReader();
     let scanningEnabled = false;
 
-    // Only accept a QR code when all detected corner points are inside the
-    // visible scan window. ZXing reports points in the video's native pixels,
-    // so map them to the video's displayed position first.
+    function setStatus(type, icon, title, detail) {
+      status.className = type;
+      scanWindow.className = type === "valid" || type === "invalid" ? type : "";
+      statusIcon.textContent = icon;
+      statusTitle.textContent = title;
+      statusDetail.textContent = detail;
+    }
+
+    // Map ZXing's native video coordinates to the visible, cropped
+    // object-fit: cover area and only accept codes fully inside the frame.
     function isInsideScanWindow(result) {
       const points = result.getResultPoints ? result.getResultPoints() : [];
       if (!points || points.length < 3 || !video.videoWidth || !video.videoHeight) {
@@ -85,48 +261,68 @@
 
       const videoRect = video.getBoundingClientRect();
       const windowRect = scanWindow.getBoundingClientRect();
+      const scale = Math.max(
+        videoRect.width / video.videoWidth,
+        videoRect.height / video.videoHeight
+      );
+      const renderedWidth = video.videoWidth * scale;
+      const renderedHeight = video.videoHeight * scale;
+      const offsetX = (videoRect.width - renderedWidth) / 2;
+      const offsetY = (videoRect.height - renderedHeight) / 2;
 
       return points.every(point => {
         const x = typeof point.getX === "function" ? point.getX() : point.x;
         const y = typeof point.getY === "function" ? point.getY() : point.y;
-        const screenX = videoRect.left + (x / video.videoWidth) * videoRect.width;
-        const screenY = videoRect.top + (y / video.videoHeight) * videoRect.height;
+        const screenX = videoRect.left + offsetX + x * scale;
+        const screenY = videoRect.top + offsetY + y * scale;
         return screenX >= windowRect.left && screenX <= windowRect.right &&
                screenY >= windowRect.top && screenY <= windowRect.bottom;
       });
     }
 
-    // Start camera and scanning
-    codeReader.decodeFromVideoDevice(null, video, (result, err) => {
+    function showValidationResult(html) {
+      const resultPage = new DOMParser().parseFromString(html, "text/html");
+      const resultText = resultPage.body.textContent.replace(/\s+/g, " ").trim();
+      const count = resultPage.querySelector("p")?.textContent.replace(/\s+/g, " ").trim();
+
+      if (resultText.includes("Ticket gültig")) {
+        setStatus("valid", "✓", "Ticket gültig", count || "Einlass freigeben");
+      } else if (resultText.includes("bereits verwendet")) {
+        setStatus("invalid", "!", "Bereits verwendet", "Ticket nicht erneut einlassen");
+      } else {
+        setStatus("invalid", "×", "Ungültiges Ticket", "Ticket bitte kontrollieren");
+      }
+    }
+
+    codeReader.decodeFromVideoDevice(null, video, (result) => {
       if (result && scanningEnabled && isInsideScanWindow(result)) {
         scanningEnabled = false;
         const parts = result.text.split("/");
         const ticketId = parts[parts.length - 1];
 
-        fetch(`/validate/${ticketId}`)
-          .then(r => r.text())
-          .then(html => {
-            msg.innerHTML  = html;
-          })
+        setStatus("", "…", "Ticket wird geprüft", "Einen Moment bitte");
+
+        fetch(`/validate/${encodeURIComponent(ticketId)}`)
+          .then(response => response.text())
+          .then(showValidationResult)
           .catch(() => {
-            msg.textContent = "Netzwerk-Fehler";
+            setStatus("warning", "!", "Keine Verbindung", "Internetverbindung prüfen");
           })
           .finally(() => {
-            // Wait 3 seconds before next scan
             setTimeout(() => {
-              msg.textContent = "Scannen Sie Ihr Ticket";
+              setStatus("", "⌗", "Bereit zum Scannen", "Nächstes Ticket in den Rahmen halten");
               scanningEnabled = true;
-            }, 1500);
+            }, 1700);
           });
       }
     })
     .then(() => {
-      msg.textContent = "Scannen Sie Ihr Ticket";
+      setStatus("", "⌗", "Bereit zum Scannen", "Ticket vollständig im Rahmen positionieren");
       scanningEnabled = true;
     })
-    .catch(err => {
-      console.error(err);
-      msg.textContent = "Kamera nicht verfügbar";
+    .catch(error => {
+      console.error(error);
+      setStatus("warning", "!", "Kamera nicht verfügbar", "Berechtigung und Browser prüfen");
     });
   </script>
 </body>
