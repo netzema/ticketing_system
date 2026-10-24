@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111712">
+  <title>DJ Leo - Musikwünsche</title>
+  <style>
+    :root {
+      color-scheme:dark;
+      --bg:#0d120e;
+      --panel:#171e18;
+      --panel-2:#1d261f;
+      --line:#2d3930;
+      --text:#f5f7f5;
+      --muted:#96a098;
+      --green:#72da92;
+      --green-dark:#0f3820;
+      --amber:#f1c66c;
+      --amber-dark:#3b2d0d;
+      --red:#f09991;
+      --red-dark:#3c1816;
+      --blue:#8fc7ff;
+      --blue-dark:#132e47;
+    }
+    * { box-sizing:border-box; }
+    html { min-height:100%; background:var(--bg); }
+    body { min-height:100vh; margin:0; background:linear-gradient(180deg, #151d17 0, var(--bg) 280px); color:var(--text); font-family:Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing:antialiased; }
+    button, input { font:inherit; }
+    button { cursor:pointer; }
+    .topbar { position:sticky; z-index:10; top:0; padding:max(9px, env(safe-area-inset-top)) 14px 8px; border-bottom:1px solid rgba(255,255,255,.08); background:rgba(13,18,14,.93); backdrop-filter:blur(18px); }
+    .topbar-inner { display:flex; width:min(100%, 820px); margin:0 auto; align-items:center; justify-content:space-between; gap:14px; }
+    .title small { display:block; margin-bottom:3px; color:var(--green); font-size:.64rem; font-weight:850; letter-spacing:.12em; text-transform:uppercase; }
+    h1 { margin:0; font-size:1.18rem; letter-spacing:-.025em; }
+    .acceptance { display:inline-flex; min-height:36px; align-items:center; gap:7px; padding:0 11px; border:1px solid rgba(114,218,146,.27); border-radius:11px; background:rgba(114,218,146,.11); color:#d6f6df; font-size:.72rem; font-weight:800; }
+    .acceptance::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--green); }
+    .acceptance.paused { border-color:var(--line); background:var(--panel); color:#c0c6c1; }
+    .acceptance.paused::before { background:#8b938d; }
+    .layout { width:min(100%, 900px); margin:0 auto; padding:10px 12px calc(32px + env(safe-area-inset-bottom)); }
+    .tools { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:7px; align-items:center; }
+    .search { position:relative; }
+    .search input { width:100%; min-height:40px; padding:0 12px 0 36px; border:1px solid var(--line); border-radius:12px; outline:none; background:var(--panel); color:var(--text); font-size:.84rem; }
+    .search input:focus { border-color:#5fad77; box-shadow:0 0 0 3px rgba(95,173,119,.13); }
+    .search::before { content:"⌕"; position:absolute; top:50%; left:13px; transform:translateY(-52%); color:var(--muted); font-size:1.1rem; }
+    .refresh-state { display:flex; min-width:38px; min-height:38px; align-items:center; justify-content:center; color:var(--muted); font-size:.65rem; }
+    .refresh-state.error { color:var(--red); }
+    .tabs { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:5px; margin:8px 0 9px; }
+    .tab { display:inline-flex; min-width:0; min-height:36px; align-items:center; justify-content:center; gap:2px; padding:0 2px; border:1px solid var(--line); border-radius:10px; background:var(--panel); color:#b7c0b9; font-size:.62rem; font-weight:800; }
+    .tab.active { border-color:#82d69b; background:#e9f8ed; color:#112619; }
+    .tab-count { display:grid; min-width:16px; height:16px; place-items:center; padding:0 3px; border-radius:999px; background:rgba(255,255,255,.09); font-size:.56rem; }
+    .tab.active .tab-count { background:rgba(20,65,34,.12); }
+    .section-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin-bottom:6px; }
+    .section-heading h2 { margin:0; font-size:.86rem; }
+    .section-heading span { color:var(--muted); font-size:.62rem; }
+    .request-list { display:grid; gap:6px; }
+    .request-card { padding:10px; border:1px solid var(--line); border-radius:13px; background:linear-gradient(145deg, var(--panel-2), var(--panel)); box-shadow:0 7px 20px rgba(0,0,0,.1); }
+    .request-main { display:grid; grid-template-columns:minmax(0, 1fr) auto; align-items:start; gap:10px; }
+    .song { margin:0; overflow-wrap:anywhere; font-size:.96rem; line-height:1.15; letter-spacing:-.012em; }
+    .artist { display:block; margin-top:3px; color:#b3bdb5; font-size:.7rem; line-height:1.15; overflow-wrap:anywhere; }
+    .request-info { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+    .popularity { flex:0 0 auto; padding:3px 6px; border-radius:999px; background:rgba(241,198,108,.14); color:#f6d998; font-size:.58rem; font-weight:850; white-space:nowrap; }
+    .meta { color:var(--muted); font-size:.6rem; white-space:nowrap; }
+    .actions { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+    .action { min-height:32px; padding:0 9px; border:1px solid var(--line); border-radius:8px; background:#222b24; color:#dbe1dc; font-size:.66rem; font-weight:800; }
+    .action:hover { filter:brightness(1.08); }
+    .action.played { border-color:rgba(114,218,146,.25); background:var(--green-dark); color:#baf0ca; }
+    .action.later { border-color:rgba(241,198,108,.2); background:var(--amber-dark); color:#f5d99e; }
+    .action.rejected { border-color:rgba(240,153,145,.2); background:var(--red-dark); color:#f6bbb5; }
+    .action.new { border-color:rgba(143,199,255,.2); background:var(--blue-dark); color:#bddcff; }
+    .empty { padding:42px 20px; border:1px dashed var(--line); border-radius:18px; color:var(--muted); text-align:center; }
+    .empty strong { display:block; margin-bottom:6px; color:#d6dcd7; }
+    details { margin-top:16px; border-top:1px solid var(--line); }
+    summary { padding:13px 2px; color:#aab3ac; font-size:.72rem; font-weight:750; cursor:pointer; }
+    .settings { display:grid; gap:9px; padding-bottom:18px; }
+    .settings-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px; border:1px solid var(--line); border-radius:13px; background:var(--panel); }
+    .settings-copy strong { display:block; font-size:.82rem; }
+    .settings-copy small { display:block; margin-top:3px; color:var(--muted); font-size:.68rem; }
+    .settings a, .settings button { flex:0 0 auto; min-height:36px; padding:0 10px; border:1px solid var(--line); border-radius:9px; background:#242e26; color:#e5e9e6; font-size:.7rem; font-weight:760; text-decoration:none; }
+    .settings .danger { color:#f3aaa4; }
+    .logout-form { margin:0; }
+    footer { margin-top:16px; color:#606b62; font-size:.62rem; text-align:center; }
+    footer strong { color:#7a857c; }
+    .snackbar { position:fixed; z-index:20; left:50%; bottom:max(16px, env(safe-area-inset-bottom)); display:flex; width:calc(100% - 28px); max-width:500px; min-height:54px; align-items:center; justify-content:space-between; gap:12px; padding:11px 12px 11px 16px; transform:translateX(-50%); border:1px solid #3d4a40; border-radius:14px; background:#edf5ef; color:#15231a; box-shadow:0 16px 50px rgba(0,0,0,.42); font-size:.8rem; font-weight:700; }
+    .snackbar[hidden] { display:none; }
+    .snackbar button { min-height:34px; border:0; border-radius:8px; background:#193f25; color:#fff; font-size:.72rem; font-weight:800; }
+    @media (min-width:700px) {
+      .layout { padding-top:14px; }
+      .tab { font-size:.7rem; }
+      .request-list { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="title"><small>Oktoberfest 2026</small><h1>DJ Leo</h1></div>
+      <button id="acceptance-button" class="acceptance" type="button">Wünsche geöffnet</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <div class="tools">
+      <label class="search">
+        <span hidden>Musikwünsche durchsuchen</span>
+        <input id="search" type="search" placeholder="Titel oder Interpret" autocomplete="off">
+      </label>
+      <span id="refresh-state" class="refresh-state" title="Automatische Aktualisierung" aria-label="Automatische Aktualisierung">Live</span>
+    </div>
+
+    <nav class="tabs" aria-label="Status der Musikwünsche">
+      <button class="tab active" type="button" data-status="new">Neu <span class="tab-count" data-count="new">0</span></button>
+      <button class="tab" type="button" data-status="played">Gespielt <span class="tab-count" data-count="played">0</span></button>
+      <button class="tab" type="button" data-status="later">Später <span class="tab-count" data-count="later">0</span></button>
+      <button class="tab" type="button" data-status="rejected">Verworfen <span class="tab-count" data-count="rejected">0</span></button>
+    </nav>
+
+    <div class="section-heading">
+      <h2 id="section-title">Neue Wünsche</h2>
+      <span id="section-summary">Wird geladen</span>
+    </div>
+    <section id="request-list" class="request-list" aria-live="polite"></section>
+
+    <details>
+      <summary>Weitere Aktionen</summary>
+      <div class="settings">
+        <div class="settings-row">
+          <div class="settings-copy"><strong>QR-Seite</strong><small>Druckvorlage für die Tische</small></div>
+          <a href="{{ url_for('music_request_qr_page') }}" target="_blank" rel="noopener">Öffnen</a>
+        </div>
+        <div class="settings-row">
+          <div class="settings-copy"><strong>Alle Wünsche löschen</strong><small>Für das Ende der Veranstaltung</small></div>
+          <button id="delete-all" class="danger" type="button">Löschen</button>
+        </div>
+        <div class="settings-row">
+          <div class="settings-copy"><strong>DJ-Bereich verlassen</strong><small>Erneute Anmeldung erforderlich</small></div>
+          <form class="logout-form" method="post" action="{{ url_for('dj_logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit">Abmelden</button>
+          </form>
+        </div>
+      </div>
+    </details>
+    <footer>Technik von <strong>Netzl Data Solutions</strong></footer>
+  </main>
+
+  <div id="snackbar" class="snackbar" role="status" aria-live="polite" hidden>
+    <span id="snackbar-text"></span>
+    <button id="undo-button" type="button">Rückgängig</button>
+  </div>
+
+  <script>
+    const statusLabels = {
+      new:{title:"Neue Wünsche", short:"Neu"},
+      later:{title:"Für später", short:"Später"},
+      played:{title:"Gespielte Titel", short:"Gespielt"},
+      rejected:{title:"Verworfene Wünsche", short:"Verworfen"}
+    };
+    const actionSets = {
+      new:[{status:"played", label:"Gespielt"}, {status:"later", label:"Später"}, {status:"rejected", label:"Verwerfen"}],
+      later:[{status:"played", label:"Gespielt"}, {status:"new", label:"Zurück zu Neu"}, {status:"rejected", label:"Verwerfen"}],
+      played:[{status:"later", label:"Noch einmal"}, {status:"new", label:"Zurück zu Neu"}],
+      rejected:[{status:"new", label:"Zurück zu Neu"}, {status:"later", label:"Später"}]
+    };
+    const state = {
+      requests:[],
+      activeStatus:"new",
+      acceptingRequests:true,
+      csrfToken:{{ csrf_token()|tojson }},
+      undo:null
+    };
+
+    const requestList = document.getElementById("request-list");
+    const searchInput = document.getElementById("search");
+    const sectionTitle = document.getElementById("section-title");
+    const sectionSummary = document.getElementById("section-summary");
+    const acceptanceButton = document.getElementById("acceptance-button");
+    const refreshState = document.getElementById("refresh-state");
+    const snackbar = document.getElementById("snackbar");
+    const snackbarText = document.getElementById("snackbar-text");
+    const undoButton = document.getElementById("undo-button");
+    let snackbarTimer = null;
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        cache:"no-store",
+        ...options,
+        headers:{
+          "Accept":"application/json",
+          ...(options.body ? {"Content-Type":"application/json"} : {}),
+          ...(options.method && options.method !== "GET" ? {"X-CSRF-Token":state.csrfToken} : {}),
+          ...(options.headers || {})
+        }
+      });
+      if (response.status === 401) {
+        window.location.href = "{{ url_for('dj_login') }}";
+        throw new Error("Anmeldung erforderlich");
+      }
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Aktion fehlgeschlagen");
+      return result;
+    }
+
+    function timeLabel(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "";
+      return date.toLocaleTimeString("de-AT", {hour:"2-digit", minute:"2-digit"}) + " Uhr";
+    }
+
+    function statusCount(status) {
+      return state.requests.filter(item => item.status === status).length;
+    }
+
+    function updateHeader() {
+      acceptanceButton.classList.toggle("paused", !state.acceptingRequests);
+      acceptanceButton.textContent = state.acceptingRequests ? "Wünsche geöffnet" : "Wünsche pausiert";
+      acceptanceButton.title = state.acceptingRequests ? "Neue Wünsche pausieren" : "Neue Wünsche wieder öffnen";
+      Object.keys(statusLabels).forEach(status => {
+        document.querySelector(`[data-count="${status}"]`).textContent = statusCount(status);
+      });
+    }
+
+    function filteredRequests() {
+      const query = searchInput.value.trim().toLocaleLowerCase("de");
+      const items = state.requests.filter(item => item.status === state.activeStatus && (!query || item.song.toLocaleLowerCase("de").includes(query)));
+      items.sort((a, b) => {
+        const aTime = new Date(state.activeStatus === "new" ? a.last_requested_at : a.updated_at).getTime();
+        const bTime = new Date(state.activeStatus === "new" ? b.last_requested_at : b.updated_at).getTime();
+        return state.activeStatus === "later" ? aTime - bTime : bTime - aTime;
+      });
+      return items;
+    }
+
+    function createAction(item, action) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `action ${action.status}`;
+      button.textContent = action.label;
+      button.addEventListener("click", () => moveRequest(item.id, action.status, true));
+      return button;
+    }
+
+    function createCard(item) {
+      const card = document.createElement("article");
+      card.className = "request-card";
+      const main = document.createElement("div");
+      main.className = "request-main";
+      const track = document.createElement("div");
+      const song = document.createElement("h3");
+      song.className = "song";
+      song.textContent = item.title || item.song;
+      const artist = document.createElement("span");
+      artist.className = "artist";
+      artist.textContent = item.artist || "Interpret nicht angegeben";
+      track.append(song, artist);
+      const info = document.createElement("div");
+      info.className = "request-info";
+      if (item.request_count > 1) {
+        const popularity = document.createElement("span");
+        popularity.className = "popularity";
+        popularity.textContent = `${item.request_count}x gewünscht`;
+        popularity.title = `${item.request_count} Mal gewünscht`;
+        info.appendChild(popularity);
+      }
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = timeLabel(item.request_count > 1 ? item.last_requested_at : item.created_at);
+      info.appendChild(meta);
+      main.append(track, info);
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      actionSets[item.status].forEach(action => actions.appendChild(createAction(item, action)));
+      card.append(main, meta, actions);
+      return card;
+    }
+
+    function render() {
+      updateHeader();
+      const items = filteredRequests();
+      sectionTitle.textContent = statusLabels[state.activeStatus].title;
+      const total = statusCount(state.activeStatus);
+      sectionSummary.textContent = searchInput.value.trim() ? `${items.length} von ${total}` : `${total} ${total === 1 ? "Eintrag" : "Einträge"}`;
+      requestList.replaceChildren();
+      if (!items.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        const strong = document.createElement("strong");
+        strong.textContent = searchInput.value.trim() ? "Kein Treffer" : "Hier ist noch nichts";
+        const detail = document.createElement("span");
+        detail.textContent = searchInput.value.trim() ? "Versuche einen anderen Suchbegriff." : "Neue Wünsche erscheinen automatisch.";
+        empty.append(strong, detail);
+        requestList.appendChild(empty);
+        return;
+      }
+      items.forEach(item => requestList.appendChild(createCard(item)));
+    }
+
+    function showSnackbar(message, undo = null) {
+      window.clearTimeout(snackbarTimer);
+      state.undo = undo;
+      snackbarText.textContent = message;
+      undoButton.hidden = !undo;
+      snackbar.hidden = false;
+      snackbarTimer = window.setTimeout(() => {
+        snackbar.hidden = true;
+        state.undo = null;
+      }, 6000);
+    }
+
+    async function refresh(quiet = false) {
+      try {
+        const result = await api("/api/dj/musikwunsch");
+        state.requests = result.requests;
+        state.acceptingRequests = result.accepting_requests;
+        state.csrfToken = result.csrf_token;
+        refreshState.textContent = "Live";
+        refreshState.classList.remove("error");
+        render();
+      } catch (error) {
+        refreshState.textContent = "Offline";
+        refreshState.classList.add("error");
+        if (!quiet) showSnackbar(error.message);
+      }
+    }
+
+    async function moveRequest(id, newStatus, allowUndo) {
+      const item = state.requests.find(entry => entry.id === id);
+      if (!item || item.status === newStatus) return;
+      const previousStatus = item.status;
+      try {
+        const result = await api(`/api/dj/musikwunsch/${id}/status`, {
+          method:"POST",
+          body:JSON.stringify({status:newStatus})
+        });
+        state.requests = state.requests.map(entry => entry.id === id ? result.request : entry);
+        render();
+        showSnackbar(
+          `Nach „${statusLabels[newStatus].short}“ verschoben`,
+          allowUndo ? {id, status:previousStatus} : null
+        );
+      } catch (error) {
+        showSnackbar(error.message);
+      }
+    }
+
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(item => item.classList.toggle("active", item === tab));
+        state.activeStatus = tab.dataset.status;
+        render();
+      });
+    });
+    searchInput.addEventListener("input", render);
+
+    acceptanceButton.addEventListener("click", async () => {
+      acceptanceButton.disabled = true;
+      try {
+        const result = await api("/api/dj/musikwunsch/annahme", {
+          method:"POST",
+          body:JSON.stringify({accepting:!state.acceptingRequests})
+        });
+        state.acceptingRequests = result.accepting_requests;
+        render();
+        showSnackbar(state.acceptingRequests ? "Musikwünsche sind wieder geöffnet" : "Neue Musikwünsche sind pausiert");
+      } catch (error) {
+        showSnackbar(error.message);
+      } finally {
+        acceptanceButton.disabled = false;
+      }
+    });
+
+    undoButton.addEventListener("click", () => {
+      if (!state.undo) return;
+      const undo = state.undo;
+      state.undo = null;
+      snackbar.hidden = true;
+      moveRequest(undo.id, undo.status, false);
+    });
+
+    document.getElementById("delete-all").addEventListener("click", async () => {
+      const confirmation = window.prompt("Zum endgültigen Löschen bitte ALLE LÖSCHEN eingeben.");
+      if (confirmation !== "ALLE LÖSCHEN") return;
+      try {
+        await api("/api/dj/musikwunsch/alle-loeschen", {
+          method:"POST",
+          body:JSON.stringify({confirmation})
+        });
+        state.requests = [];
+        render();
+        showSnackbar("Alle Musikwünsche wurden gelöscht");
+      } catch (error) {
+        showSnackbar(error.message);
+      }
+    });
+
+    refresh();
+    window.setInterval(() => {
+      if (!document.hidden) refresh(true);
+    }, 5000);
+  </script>
+</body>
+</html>

@@ -107,3 +107,27 @@ To reset your validated tickets, visit:
 ```
 https://tickets.danielnetzl.com/reset?key=
 ```
+
+---
+
+### Music Request Configuration
+
+Add the following values to the production `.env` file before restarting the service:
+
+```dotenv
+DJ_PASSWORD=use-a-strong-password-for-leo
+FLASK_SECRET_KEY=use-a-long-random-session-secret
+SESSION_COOKIE_SECURE=1
+MUSIC_REQUEST_URL=https://jugend.netzldatasolutions.at/musikwunsch
+MUSIC_REQUEST_COOLDOWN_SECONDS=30
+```
+
+After the restart, verify these routes:
+
+```text
+https://jugend.netzldatasolutions.at/musikwunsch
+https://jugend.netzldatasolutions.at/dj/musikwunsch
+https://jugend.netzldatasolutions.at/musikwunsch/qr
+```
+
+The required SQLite tables are created automatically. The DJ password must never be committed to Git.

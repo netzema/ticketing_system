@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#07110b">
-  <title>Ticket-Scanner · Jugend Göttlesbrunn</title>
+  <title>Ticket-Scanner - Jugend Göttlesbrunn</title>
   <style>
     :root {
       color-scheme:dark;
       --green:#38d878;
+      --teal:#35d0c5;
       --red:#ff5d5d;
       --amber:#ffc857;
       --panel:rgba(8, 15, 11, 0.86);
@@ -148,6 +149,23 @@
       box-shadow:0 0 0 9999px rgba(0,0,0,.54), 0 0 34px rgba(255,93,93,.42);
     }
 
+    #scan-window.recent {
+      border-color:var(--teal);
+      box-shadow:0 0 0 9999px rgba(0,0,0,.54), 0 0 34px rgba(53,208,197,.46);
+    }
+
+    #scan-window.used,
+    #scan-window.warning {
+      border-color:var(--amber);
+      box-shadow:0 0 0 9999px rgba(0,0,0,.54), 0 0 34px rgba(255,200,87,.42);
+    }
+
+    #scan-window.valid::before, #scan-window.valid::after { border-color:var(--green); }
+    #scan-window.recent::before, #scan-window.recent::after { border-color:var(--teal); }
+    #scan-window.used::before, #scan-window.used::after,
+    #scan-window.warning::before, #scan-window.warning::after { border-color:var(--amber); }
+    #scan-window.invalid::before, #scan-window.invalid::after { border-color:var(--red); }
+
     #hint {
       position:absolute;
       top:calc(100% + 14px);
@@ -199,6 +217,8 @@
     #status-title { display:block; font-size:1.05rem; font-weight:780; line-height:1.15; }
     #status-detail { display:block; margin-top:4px; color:rgba(255,255,255,.68); font-size:.79rem; line-height:1.2; }
     #status.valid #status-icon { background:var(--green); color:#062612; }
+    #status.recent #status-icon { background:var(--teal); color:#052725; }
+    #status.used #status-icon { background:var(--amber); color:#302000; }
     #status.invalid #status-icon { background:var(--red); color:#310707; }
     #status.warning #status-icon { background:var(--amber); color:#302000; }
 
@@ -211,7 +231,7 @@
   </style>
 </head>
 <body>
-  <header id="brand" aria-label="Netzl Data Solutions · Jugend Göttlesbrunn">
+  <header id="brand" aria-label="Netzl Data Solutions - Jugend Göttlesbrunn">
     <span class="brand-logo"><img src="/static/netzl-logo.svg" alt="Netzl Data Solutions"></span>
     <span class="brand-name">Einlass<span class="brand-event">Oktoberfest 2026</span></span>
   </header>
@@ -245,7 +265,7 @@
 
     function setStatus(type, icon, title, detail) {
       status.className = type;
-      scanWindow.className = type === "valid" || type === "invalid" ? type : "";
+      scanWindow.className = ["valid", "recent", "used", "invalid", "warning"].includes(type) ? type : "";
       statusIcon.textContent = icon;
       statusTitle.textContent = title;
       statusDetail.textContent = detail;
@@ -280,15 +300,33 @@
       });
     }
 
-    function showValidationResult(html) {
-      const resultPage = new DOMParser().parseFromString(html, "text/html");
-      const resultText = resultPage.body.textContent.replace(/\s+/g, " ").trim();
-      const count = resultPage.querySelector("p")?.textContent.replace(/\s+/g, " ").trim();
+    function formatAge(seconds) {
+      if (seconds < 5) return "Gerade eben";
+      if (seconds < 60) return "Vor wenigen Sekunden";
+      if (seconds < 120) return "Vor 1 Minute";
+      if (seconds < 3600) return `Vor ${Math.floor(seconds / 60)} Minuten`;
+      const hours = Math.floor(seconds / 3600);
+      return hours === 1 ? "Vor 1 Stunde" : `Vor ${hours} Stunden`;
+    }
 
-      if (resultText.includes("Ticket gültig")) {
-        setStatus("valid", "✓", "Ticket gültig", count || "Einlass freigeben");
-      } else if (resultText.includes("bereits verwendet")) {
-        setStatus("invalid", "!", "Bereits verwendet", "Ticket nicht erneut einlassen");
+    function showValidationResult(result) {
+      if (result.status === "valid") {
+        const count = result.count ? `Bereits eingescannt: ${result.count}` : "Einlass freigeben";
+        setStatus("valid", "✓", "Ticket gültig", count);
+      } else if (result.status === "recent") {
+        setStatus(
+          "recent",
+          "↻",
+          "Soeben validiert",
+          `${formatAge(result.age_seconds)} - ${result.scanned_time} Uhr`
+        );
+      } else if (result.status === "already_used") {
+        setStatus(
+          "used",
+          "!",
+          "Bereits validiert",
+          `${formatAge(result.age_seconds)} - ${result.scanned_time} Uhr`
+        );
       } else {
         setStatus("invalid", "×", "Ungültiges Ticket", "Ticket bitte kontrollieren");
       }
@@ -302,8 +340,14 @@
 
         setStatus("", "…", "Ticket wird geprüft", "Einen Moment bitte");
 
-        fetch(`/validate/${encodeURIComponent(ticketId)}`)
-          .then(response => response.text())
+        fetch(`/validate/${encodeURIComponent(ticketId)}`, {
+          headers: { "Accept": "application/json" },
+          cache: "no-store"
+        })
+          .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+          })
           .then(showValidationResult)
           .catch(() => {
             setStatus("warning", "!", "Keine Verbindung", "Internetverbindung prüfen");

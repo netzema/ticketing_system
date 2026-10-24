@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#102318">
+  <title>Musikwunsch - Oktoberfest 2026</title>
+  <style>
+    :root {
+      color-scheme:dark;
+      --green:#79d995;
+      --green-strong:#38c86c;
+      --ink:#f8fbf8;
+      --muted:#b6c1b9;
+      --panel:rgba(18, 37, 25, .92);
+      --line:rgba(255,255,255,.12);
+      --danger:#ffb2ab;
+    }
+    * { box-sizing:border-box; }
+    html { min-height:100%; background:#09140d; }
+    body {
+      min-height:100vh;
+      min-height:100dvh;
+      margin:0;
+      padding:max(22px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom));
+      background:
+        radial-gradient(circle at 50% 0, rgba(70,140,89,.4), transparent 35rem),
+        linear-gradient(165deg, #102318 0%, #08130c 72%);
+      color:var(--ink);
+      font-family:Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+    .page {
+      display:flex;
+      flex-direction:column;
+      width:min(100%, 480px);
+      min-height:calc(100vh - 44px);
+      min-height:calc(100dvh - 44px);
+      margin:0 auto;
+    }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .event { color:var(--green); font-size:.76rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+    .state {
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      padding:7px 10px;
+      border:1px solid rgba(121,217,149,.28);
+      border-radius:999px;
+      background:rgba(121,217,149,.1);
+      color:#d8f6e1;
+      font-size:.75rem;
+      font-weight:750;
+    }
+    .state::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--green-strong); box-shadow:0 0 0 4px rgba(56,200,108,.12); }
+    .state.paused { border-color:rgba(255,255,255,.13); background:rgba(255,255,255,.06); color:var(--muted); }
+    .state.paused::before { background:#97a099; box-shadow:none; }
+    main { margin:auto 0; padding:30px 0 22px; }
+    .music-mark {
+      display:grid;
+      width:48px;
+      height:48px;
+      margin-bottom:16px;
+      place-items:center;
+      border:1px solid rgba(121,217,149,.26);
+      border-radius:17px;
+      background:rgba(121,217,149,.11);
+      color:var(--green);
+      font-size:1.65rem;
+      font-weight:900;
+      transform:rotate(-3deg);
+    }
+    h1 { margin:0; font-size:clamp(2.25rem, 11vw, 3.8rem); line-height:.98; letter-spacing:-.055em; }
+    .intro { margin:14px 0 0; color:#e2e8e3; font-size:1.02rem; line-height:1.5; }
+    .timing { margin:8px 0 0; color:var(--muted); font-size:.9rem; line-height:1.45; }
+    .notice {
+      display:flex;
+      gap:10px;
+      margin:16px 0 18px;
+      padding:10px 13px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:rgba(255,255,255,.045);
+      color:#ccd4ce;
+      font-size:.81rem;
+      line-height:1.4;
+    }
+    .notice strong { color:#fff; }
+    form { position:relative; }
+    .field + .field { margin-top:9px; }
+    label { display:block; margin-bottom:9px; color:#eaf0eb; font-size:.86rem; font-weight:750; }
+    input[type="text"] {
+      width:100%;
+      min-height:56px;
+      padding:0 17px;
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:16px;
+      outline:none;
+      background:rgba(255,255,255,.075);
+      color:#fff;
+      font:inherit;
+      font-size:1rem;
+      transition:border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    input[type="text"]::placeholder { color:#89958c; }
+    input[type="text"]:focus { border-color:var(--green); background:rgba(255,255,255,.095); box-shadow:0 0 0 4px rgba(121,217,149,.12); }
+    button {
+      width:100%;
+      min-height:54px;
+      margin-top:10px;
+      border:0;
+      border-radius:16px;
+      background:linear-gradient(135deg, #88e6a2, #59cf7d);
+      color:#092012;
+      font:inherit;
+      font-size:1rem;
+      font-weight:850;
+      cursor:pointer;
+      box-shadow:0 13px 30px rgba(42,156,76,.22);
+    }
+    button:active:not(:disabled) { transform:translateY(1px); }
+    button:disabled, input:disabled { cursor:not-allowed; opacity:.5; }
+    .honeypot { position:absolute !important; left:-10000px !important; width:1px !important; height:1px !important; overflow:hidden !important; }
+    #feedback { min-height:24px; margin:13px 2px 0; color:var(--muted); font-size:.84rem; line-height:1.4; }
+    #feedback.success { color:#a8edbb; }
+    #feedback.error { color:var(--danger); }
+    footer { margin-top:auto; padding-top:16px; color:#6f7d73; font-size:.69rem; text-align:center; }
+    footer strong { color:#8d9a91; font-weight:650; }
+    @media (max-height:700px) {
+      main { padding:28px 0 20px; }
+      .music-mark { margin-bottom:16px; }
+      .notice { margin:16px 0 20px; }
+    }
+    @media (prefers-reduced-motion:no-preference) {
+      main { animation:enter .4s ease both; }
+      @keyframes enter { from { opacity:0; transform:translateY(8px); } }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <span class="event">Oktoberfest 2026</span>
+      <span id="request-state" class="state{% if not accepting_requests %} paused{% endif %}">
+        {% if accepting_requests %}Wünsche geöffnet{% else %}Momentan pausiert{% endif %}
+      </span>
+    </header>
+
+    <main>
+      <div class="music-mark" aria-hidden="true">♫</div>
+      <h1>Dein<br>Musikwunsch</h1>
+      <p class="intro">Füge hier deinen persönlichen Musikwunsch hinzu. Unser DJ wird ihn in Betracht ziehen!</p>
+      <p class="timing">Die Lauser spielen bis ca. 01:30 Uhr. Danach übernimmt DJ Leo.</p>
+      <div class="notice">
+        <span aria-hidden="true">i</span>
+        <span><strong>Bitte beachte:</strong> Dein Wunsch ist keine Garantie, dass der Titel gespielt wird.</span>
+      </div>
+
+      <form id="request-form" novalidate>
+        <div class="field">
+          <label for="title">Titel</label>
+          <input
+            id="title"
+            name="title"
+            type="text"
+            minlength="2"
+            maxlength="100"
+            placeholder="z. B. Dancing Queen"
+            autocomplete="off"
+            enterkeyhint="next"
+            {% if not accepting_requests %}disabled{% endif %}
+            required
+          >
+        </div>
+        <div class="field">
+          <label for="artist">Interpret</label>
+          <input
+            id="artist"
+            name="artist"
+            type="text"
+            minlength="2"
+            maxlength="100"
+            placeholder="z. B. ABBA"
+            autocomplete="off"
+            enterkeyhint="send"
+            {% if not accepting_requests %}disabled{% endif %}
+            required
+          >
+        </div>
+        <div class="honeypot" aria-hidden="true">
+          <label for="website">Website</label>
+          <input id="website" name="website" type="text" tabindex="-1" autocomplete="off">
+        </div>
+        <button id="submit-button" type="submit" {% if not accepting_requests %}disabled{% endif %}>
+          {% if accepting_requests %}Musikwunsch senden{% else %}Musikwünsche pausiert{% endif %}
+        </button>
+        <p id="feedback" role="status" aria-live="polite">
+          {% if not accepting_requests %}DJ Leo nimmt momentan keine neuen Wünsche an.{% endif %}
+        </p>
+      </form>
+    </main>
+
+    <footer>Technik von <strong>Netzl Data Solutions</strong></footer>
+  </div>
+
+  <script>
+    const form = document.getElementById("request-form");
+    const titleInput = document.getElementById("title");
+    const artistInput = document.getElementById("artist");
+    const websiteInput = document.getElementById("website");
+    const submitButton = document.getElementById("submit-button");
+    const feedback = document.getElementById("feedback");
+    const requestsInitiallyOpen = {{ accepting_requests|tojson }};
+    const cooldownSeconds = {{ cooldown_seconds|tojson }};
+    let countdownTimer = null;
+
+    function showFeedback(message, type = "") {
+      feedback.textContent = message;
+      feedback.className = type;
+    }
+
+    function startCountdown(seconds) {
+      window.clearInterval(countdownTimer);
+      let remaining = Math.max(1, Number(seconds) || cooldownSeconds);
+      titleInput.disabled = true;
+      artistInput.disabled = true;
+      submitButton.disabled = true;
+
+      const update = () => {
+        submitButton.textContent = `Weiterer Wunsch in ${remaining} s`;
+        remaining -= 1;
+        if (remaining < 0) {
+          window.clearInterval(countdownTimer);
+          titleInput.disabled = false;
+          artistInput.disabled = false;
+          submitButton.disabled = false;
+          submitButton.textContent = "Weiteren Musikwunsch senden";
+          titleInput.focus();
+        }
+      };
+      update();
+      countdownTimer = window.setInterval(update, 1000);
+    }
+
+    if (requestsInitiallyOpen) {
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const title = titleInput.value.trim();
+        const artist = artistInput.value.trim();
+        if (title.length < 2) {
+          showFeedback("Bitte gib den Titel ein.", "error");
+          titleInput.focus();
+          return;
+        }
+        if (artist.length < 2) {
+          showFeedback("Bitte gib den Interpreten ein.", "error");
+          artistInput.focus();
+          return;
+        }
+
+        submitButton.disabled = true;
+        submitButton.textContent = "Wird gesendet...";
+        showFeedback("", "");
+
+        try {
+          const response = await fetch("/api/musikwunsch", {
+            method:"POST",
+            headers:{"Content-Type":"application/json", "Accept":"application/json"},
+            body:JSON.stringify({title, artist, website:websiteInput.value})
+          });
+          const result = await response.json();
+
+          if (!response.ok) {
+            if (response.status === 429) {
+              showFeedback(result.error, "error");
+              startCountdown(result.retry_after);
+              return;
+            }
+            if (response.status === 423) {
+              titleInput.disabled = true;
+              artistInput.disabled = true;
+              submitButton.disabled = true;
+              submitButton.textContent = "Musikwünsche pausiert";
+            }
+            throw new Error(result.error || "Dein Wunsch konnte nicht gesendet werden.");
+          }
+
+          titleInput.value = "";
+          artistInput.value = "";
+          websiteInput.value = "";
+          const detail = result.duplicate && result.request_count > 1
+            ? ` Dieser Titel wurde jetzt ${result.request_count} Mal gewünscht.`
+            : "";
+          showFeedback(result.message + detail, "success");
+          startCountdown(cooldownSeconds);
+        } catch (error) {
+          showFeedback(error.message || "Keine Verbindung. Bitte versuche es erneut.", "error");
+          if (!titleInput.disabled) {
+            submitButton.disabled = false;
+            submitButton.textContent = "Musikwunsch senden";
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>

@@ -49,6 +49,30 @@ This project generates, prints, and scans tickets with QR codes. It uses Python,
    * Accept certificate and allow camera access.
    * Page shows validation result in large colored text.
 
+## Music Requests
+
+The Oktoberfest music request flow is part of the same Flask application:
+
+* Guest form: `https://jugend.netzldatasolutions.at/musikwunsch`
+* DJ dashboard: `https://jugend.netzldatasolutions.at/dj/musikwunsch`
+* Printable QR page: `https://jugend.netzldatasolutions.at/musikwunsch/qr`
+
+Before starting Gunicorn, configure these environment variables:
+
+```dotenv
+DJ_PASSWORD=use-a-strong-password-for-leo
+FLASK_SECRET_KEY=use-a-long-random-session-secret
+SESSION_COOKIE_SECURE=1
+MUSIC_REQUEST_URL=https://jugend.netzldatasolutions.at/musikwunsch
+MUSIC_REQUEST_COOLDOWN_SECONDS=30
+```
+
+The music request tables are added automatically to the current event database on first use. Existing ticket records are not modified. Run the automated regression suite with:
+
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+```
+
 ---
 
 # For Developers
