@@ -29,7 +29,7 @@ class MusicRequestAppTests(unittest.TestCase):
             SECRET_KEY="test-session-secret",
             DJ_PASSWORD="leo-test-password",
             SESSION_COOKIE_SECURE=False,
-            MUSIC_REQUEST_COOLDOWN_SECONDS=30,
+            MUSIC_REQUEST_COOLDOWN_SECONDS=600,
         )
         self.client = music_app.app.test_client()
 
@@ -69,7 +69,7 @@ class MusicRequestAppTests(unittest.TestCase):
         )
 
     def test_all_interfaces_are_branded_and_contain_no_middle_dots(self):
-        public_paths = ["/", "/scan", "/musikwunsch", "/musikwunsch/qr"]
+        public_paths = ["/", "/scan", "/musikwunsch"]
         for path in public_paths:
             with self.subTest(path=path):
                 response = self.client.get(path)
@@ -77,10 +77,15 @@ class MusicRequestAppTests(unittest.TestCase):
                 text = response.get_data(as_text=True)
                 self.assertIn("Netzl Data Solutions", text)
                 self.assertNotIn("·", text)
+                self.assertIn('rel="icon" type="image/svg+xml" href="/static/favicon.svg"', text)
+                self.assertIn('rel="apple-touch-icon" href="/static/apple-touch-icon.png"', text)
 
         login_page = self.client.get("/dj/musikwunsch/anmelden")
-        self.assertIn("Netzl Data Solutions", login_page.get_data(as_text=True))
-        self.assertNotIn("·", login_page.get_data(as_text=True))
+        login_text = login_page.get_data(as_text=True)
+        self.assertIn("Netzl Data Solutions", login_text)
+        self.assertNotIn("·", login_text)
+        self.assertIn('/static/favicon.svg', login_text)
+        self.assertIn('/static/apple-touch-icon.png', login_text)
 
         self.assertEqual(self.login().status_code, 302)
         dashboard = self.client.get("/dj/musikwunsch")
@@ -88,6 +93,10 @@ class MusicRequestAppTests(unittest.TestCase):
         dashboard_text = dashboard.get_data(as_text=True)
         self.assertIn("Netzl Data Solutions", dashboard_text)
         self.assertNotIn("·", dashboard_text)
+        self.assertIn('/static/favicon.svg', dashboard_text)
+        self.assertIn('/static/apple-touch-icon.png', dashboard_text)
+        self.assertNotIn("QR-Seite", dashboard_text)
+        self.assertNotIn("/musikwunsch/qr", dashboard_text)
         self.assertLess(
             dashboard_text.index('data-status="played"'),
             dashboard_text.index('data-status="later"'),
@@ -95,8 +104,40 @@ class MusicRequestAppTests(unittest.TestCase):
         self.assertNotIn("Mal gewünscht - zuletzt", dashboard_text)
 
         ticket_page = self.client.get("/validate/unknown")
-        self.assertIn("Netzl Data Solutions", ticket_page.get_data(as_text=True))
-        self.assertNotIn("·", ticket_page.get_data(as_text=True))
+        ticket_text = ticket_page.get_data(as_text=True)
+        self.assertIn("Netzl Data Solutions", ticket_text)
+        self.assertNotIn("·", ticket_text)
+        self.assertIn('/static/favicon.svg', ticket_text)
+        self.assertIn('/static/apple-touch-icon.png', ticket_text)
+
+    def test_icon_assets_are_served(self):
+        favicon = self.client.get("/static/favicon.svg")
+        apple_icon = self.client.get("/static/apple-touch-icon.png")
+
+        self.assertEqual(favicon.status_code, 200)
+        self.assertEqual(favicon.mimetype, "image/svg+xml")
+        self.assertTrue(favicon.data.startswith(b"<svg"))
+        self.assertEqual(apple_icon.status_code, 200)
+        self.assertEqual(apple_icon.mimetype, "image/png")
+        self.assertTrue(apple_icon.data.startswith(b"\x89PNG\r\n\x1a\n"))
+        favicon.close()
+        apple_icon.close()
+
+    def test_guest_page_is_compact_and_has_clear_feedback(self):
+        page = self.client.get("/musikwunsch").get_data(as_text=True)
+
+        self.assertNotIn("Wünsche geöffnet", page)
+        self.assertNotIn("music-mark", page)
+        self.assertNotIn("♫", page)
+        self.assertIn('id="success-overlay"', page)
+        self.assertIn('class="success-check"', page)
+        self.assertIn("Musikwunsch gesendet", page)
+        self.assertIn("}, 1800);", page)
+        self.assertIn('id="paused-dialog"', page)
+        self.assertLess(
+            page.index('id="submit-button"'),
+            page.index("Dein Wunsch ist keine Garantie"),
+        )
 
     def test_scanner_keeps_bounded_camera_flow_and_uses_structured_results(self):
         response = self.client.get("/scan")
@@ -154,15 +195,42 @@ class MusicRequestAppTests(unittest.TestCase):
 
     def test_same_device_is_rate_limited(self):
         first = self.submit("Song One", "Artist One")
-        second = self.client.post(
+        second = self.submit("Song Two", "Artist Two")
+        third = self.submit("Song Three", "Artist Three")
+        fourth = self.client.post(
             "/api/musikwunsch",
-            json={"title": "Song Two", "artist": "Artist Two", "website": ""},
+            json={"title": "Song Four", "artist": "Artist Four", "website": ""},
         )
 
         self.assertEqual(first.status_code, 201)
-        self.assertEqual(second.status_code, 429)
-        self.assertGreaterEqual(second.get_json()["retry_after"], 1)
-        self.assertIn("Retry-After", second.headers)
+        self.assertEqual(first.get_json()["remaining_requests"], 2)
+        self.assertFalse(first.get_json()["cooldown_active"])
+        self.assertEqual(second.status_code, 201)
+        self.assertEqual(second.get_json()["remaining_requests"], 1)
+        self.assertEqual(third.status_code, 201)
+        self.assertEqual(third.get_json()["remaining_requests"], 0)
+        self.assertTrue(third.get_json()["cooldown_active"])
+        self.assertEqual(third.get_json()["retry_after"], 600)
+        self.assertEqual(fourth.status_code, 429)
+        self.assertGreaterEqual(fourth.get_json()["retry_after"], 599)
+        self.assertIn("Retry-After", fourth.headers)
+
+        blocked_page = self.client.get("/musikwunsch").get_data(as_text=True)
+        self.assertIn("const deviceRetryAfter = ", blocked_page)
+        self.assertIn("Weiterer Wunsch in ${minutes}:${secondsPart}", blocked_page)
+
+        database = self.database()
+        database.execute(
+            "UPDATE music_request_clients SET blocked_until = ?",
+            ("2000-01-01T00:00:00+00:00",),
+        )
+        database.commit()
+        database.close()
+
+        after_pause = self.submit("Song Five", "Artist Five")
+        self.assertEqual(after_pause.status_code, 201)
+        self.assertEqual(after_pause.get_json()["remaining_requests"], 2)
+        self.assertFalse(after_pause.get_json()["cooldown_active"])
 
     def test_invalid_input_honeypot_and_paused_state(self):
         self.client.get("/musikwunsch")
@@ -220,7 +288,9 @@ class MusicRequestAppTests(unittest.TestCase):
         paused = self.submit("A valid song", "A valid artist", paused_client)
         self.assertEqual(paused.status_code, 423)
         page = paused_client.get("/musikwunsch").get_data(as_text=True)
-        self.assertIn("Momentan pausiert", page)
+        self.assertIn("Musikwünsche pausiert", page)
+        self.assertIn("if (!requestsInitiallyOpen) showPausedDialog();", page)
+        self.assertIn("const requestsInitiallyOpen = false;", page)
         self.assertIn("disabled", page)
 
     def test_dj_routes_require_login_and_csrf(self):
@@ -358,12 +428,9 @@ class MusicRequestAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertTrue(response.headers["Location"].endswith("/dj/musikwunsch"))
 
-    def test_qr_code_is_a_png(self):
-        response = self.client.get("/musikwunsch/qr-code.png")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.mimetype, "image/png")
-        self.assertTrue(response.data.startswith(b"\x89PNG\r\n\x1a\n"))
-        self.assertGreater(len(response.data), 500)
+    def test_qr_print_routes_are_removed(self):
+        self.assertEqual(self.client.get("/musikwunsch/qr").status_code, 404)
+        self.assertEqual(self.client.get("/musikwunsch/qr-code.png").status_code, 404)
 
     def test_existing_ticket_validation_still_works(self):
         headers = {"Accept": "application/json"}
@@ -444,6 +511,14 @@ class MusicRequestAppTests(unittest.TestCase):
         )
         database.execute(
             """
+            CREATE TABLE music_request_clients (
+                client_hash TEXT PRIMARY KEY,
+                last_submitted_at TEXT NOT NULL
+            )
+            """
+        )
+        database.execute(
+            """
             INSERT INTO music_requests(
                 song, normalized_song, status, request_count,
                 created_at, last_requested_at, updated_at
@@ -458,12 +533,17 @@ class MusicRequestAppTests(unittest.TestCase):
         columns = {
             row[1] for row in database.execute("PRAGMA table_info(music_requests)")
         }
+        client_columns = {
+            row[1]
+            for row in database.execute("PRAGMA table_info(music_request_clients)")
+        }
         row = database.execute("SELECT * FROM music_requests").fetchone()
         database.close()
 
         self.assertTrue(
             {"title", "artist", "normalized_title", "normalized_artist"}.issubset(columns)
         )
+        self.assertTrue({"submission_count", "blocked_until"}.issubset(client_columns))
         self.assertEqual(row["title"], "Legacy Song - Legacy Artist")
         self.assertEqual(row["artist"], "")
 

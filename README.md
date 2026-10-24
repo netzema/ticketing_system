@@ -55,7 +55,6 @@ The Oktoberfest music request flow is part of the same Flask application:
 
 * Guest form: `https://jugend.netzldatasolutions.at/musikwunsch`
 * DJ dashboard: `https://jugend.netzldatasolutions.at/dj/musikwunsch`
-* Printable QR page: `https://jugend.netzldatasolutions.at/musikwunsch/qr`
 
 Before starting Gunicorn, configure these environment variables:
 
@@ -63,11 +62,10 @@ Before starting Gunicorn, configure these environment variables:
 DJ_PASSWORD=use-a-strong-password-for-leo
 FLASK_SECRET_KEY=use-a-long-random-session-secret
 SESSION_COOKIE_SECURE=1
-MUSIC_REQUEST_URL=https://jugend.netzldatasolutions.at/musikwunsch
-MUSIC_REQUEST_COOLDOWN_SECONDS=30
+MUSIC_REQUEST_COOLDOWN_SECONDS=600
 ```
 
-The music request tables are added automatically to the current event database on first use. Existing ticket records are not modified. Run the automated regression suite with:
+Guests can send three requests per device before a ten-minute pause starts. The music request tables are added automatically to the current event database on first use. Existing ticket records are not modified. Run the automated regression suite with:
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -v

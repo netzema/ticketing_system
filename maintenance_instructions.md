@@ -118,8 +118,7 @@ Add the following values to the production `.env` file before restarting the ser
 DJ_PASSWORD=use-a-strong-password-for-leo
 FLASK_SECRET_KEY=use-a-long-random-session-secret
 SESSION_COOKIE_SECURE=1
-MUSIC_REQUEST_URL=https://jugend.netzldatasolutions.at/musikwunsch
-MUSIC_REQUEST_COOLDOWN_SECONDS=30
+MUSIC_REQUEST_COOLDOWN_SECONDS=600
 ```
 
 After the restart, verify these routes:
@@ -127,7 +126,6 @@ After the restart, verify these routes:
 ```text
 https://jugend.netzldatasolutions.at/musikwunsch
 https://jugend.netzldatasolutions.at/dj/musikwunsch
-https://jugend.netzldatasolutions.at/musikwunsch/qr
 ```
 
-The required SQLite tables are created automatically. The DJ password must never be committed to Git.
+The required SQLite tables are created automatically. A device can send three requests before it is paused for the configured ten minutes. The DJ password must never be committed to Git.

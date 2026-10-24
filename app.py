@@ -1,7 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 import hashlib
-import io
 import os
 import re
 import secrets
@@ -19,11 +18,9 @@ from flask import (
     render_template,
     render_template_string,
     request,
-    send_file,
     session,
     url_for,
 )
-import qrcode
 
 from config import BASE_PATH, PORT, URL
 
@@ -31,13 +28,10 @@ from config import BASE_PATH, PORT, URL
 load_dotenv()
 
 DB = os.getenv("TICKETS_DB_PATH", f"{BASE_PATH}/tickets.db")
-MUSIC_REQUEST_URL = os.getenv(
-    "MUSIC_REQUEST_URL",
-    "https://jugend.netzldatasolutions.at/musikwunsch",
-)
 SCANNER_VERSION = "2026-10-24.1"
 MUSIC_REQUEST_STATUSES = {"new", "later", "played", "rejected"}
 GUEST_COOKIE_NAME = "oktoberfest_musikwunsch"
+MUSIC_REQUESTS_BEFORE_COOLDOWN = 3
 
 app = Flask(__name__)
 app.config.update(
@@ -48,7 +42,7 @@ app.config.update(
     ),
     DJ_PASSWORD=os.getenv("DJ_PASSWORD"),
     MUSIC_REQUEST_COOLDOWN_SECONDS=int(
-        os.getenv("MUSIC_REQUEST_COOLDOWN_SECONDS", "30")
+        os.getenv("MUSIC_REQUEST_COOLDOWN_SECONDS", "600")
     ),
     MAX_CONTENT_LENGTH=16 * 1024,
     SESSION_COOKIE_HTTPONLY=True,
@@ -102,7 +96,9 @@ def ensure_music_request_schema(db):
 
         CREATE TABLE IF NOT EXISTS music_request_clients (
             client_hash TEXT PRIMARY KEY,
-            last_submitted_at TEXT NOT NULL
+            last_submitted_at TEXT NOT NULL,
+            submission_count INTEGER NOT NULL DEFAULT 0,
+            blocked_until TEXT
         );
 
         CREATE TABLE IF NOT EXISTS dj_login_attempts (
@@ -126,6 +122,20 @@ def ensure_music_request_schema(db):
     for column, data_type in migration_columns.items():
         if column not in columns:
             db.execute(f"ALTER TABLE music_requests ADD COLUMN {column} {data_type}")
+
+    client_columns = {
+        row[1]
+        for row in db.execute("PRAGMA table_info(music_request_clients)").fetchall()
+    }
+    client_migration_columns = {
+        "submission_count": "INTEGER NOT NULL DEFAULT 0",
+        "blocked_until": "TEXT",
+    }
+    for column, data_type in client_migration_columns.items():
+        if column not in client_columns:
+            db.execute(
+                f"ALTER TABLE music_request_clients ADD COLUMN {column} {data_type}"
+            )
 
     db.execute(
         """
@@ -349,11 +359,25 @@ def home():
 @app.route("/musikwunsch")
 def music_request_page():
     token, is_new = guest_token()
+    db = get_db()
+    now = utc_now()
+    client_state = db.execute(
+        "SELECT blocked_until FROM music_request_clients WHERE client_hash = ?",
+        (client_hash(token),),
+    ).fetchone()
+    device_retry_after = 0
+    if client_state:
+        blocked_until = parse_timestamp(client_state["blocked_until"])
+        if blocked_until and blocked_until > now:
+            device_retry_after = max(
+                1, int((blocked_until - now).total_seconds() + 0.999)
+            )
     response = app.make_response(
         render_template(
             "music_request.html",
-            accepting_requests=requests_are_open(),
+            accepting_requests=requests_are_open(db),
             cooldown_seconds=app.config["MUSIC_REQUEST_COOLDOWN_SECONDS"],
+            device_retry_after=device_retry_after,
         )
     )
     return set_guest_cookie(response, token, is_new)
@@ -424,24 +448,30 @@ def submit_music_request():
     try:
         db.execute("BEGIN IMMEDIATE")
         previous_submission = db.execute(
-            "SELECT last_submitted_at FROM music_request_clients WHERE client_hash = ?",
+            """
+            SELECT last_submitted_at, submission_count, blocked_until
+            FROM music_request_clients
+            WHERE client_hash = ?
+            """,
             (hashed_token,),
         ).fetchone()
+        submission_count = 0
         if previous_submission:
-            submitted_at = parse_timestamp(previous_submission["last_submitted_at"])
-            if submitted_at:
-                elapsed = (now - submitted_at).total_seconds()
-                cooldown = app.config["MUSIC_REQUEST_COOLDOWN_SECONDS"]
-                if elapsed < cooldown:
-                    retry_after = max(1, int(cooldown - elapsed + 0.999))
-                    db.rollback()
-                    response = jsonify(
-                        error=f"Bitte warte noch {retry_after} Sekunden",
-                        retry_after=retry_after,
-                    )
-                    response.status_code = 429
-                    response.headers["Retry-After"] = str(retry_after)
-                    return set_guest_cookie(response, token, is_new)
+            blocked_until = parse_timestamp(previous_submission["blocked_until"])
+            if blocked_until and blocked_until > now:
+                retry_after = max(
+                    1, int((blocked_until - now).total_seconds() + 0.999)
+                )
+                db.rollback()
+                response = jsonify(
+                    error="Du hast bereits drei Wünsche gesendet. Bitte warte, bevor du weitere sendest.",
+                    retry_after=retry_after,
+                )
+                response.status_code = 429
+                response.headers["Retry-After"] = str(retry_after)
+                return set_guest_cookie(response, token, is_new)
+            if not blocked_until:
+                submission_count = previous_submission["submission_count"] or 0
 
         existing = db.execute(
             """
@@ -493,14 +523,26 @@ def submit_music_request():
             request_id = cursor.lastrowid
             duplicate = False
 
+        submission_count += 1
+        cooldown_active = submission_count >= MUSIC_REQUESTS_BEFORE_COOLDOWN
+        blocked_until_text = None
+        if cooldown_active:
+            blocked_until_text = utc_timestamp(
+                now + timedelta(seconds=app.config["MUSIC_REQUEST_COOLDOWN_SECONDS"])
+            )
+
         db.execute(
             """
-            INSERT INTO music_request_clients(client_hash, last_submitted_at)
-            VALUES (?, ?)
+            INSERT INTO music_request_clients(
+                client_hash, last_submitted_at, submission_count, blocked_until
+            )
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(client_hash) DO UPDATE SET
-                last_submitted_at = excluded.last_submitted_at
+                last_submitted_at = excluded.last_submitted_at,
+                submission_count = excluded.submission_count,
+                blocked_until = excluded.blocked_until
             """,
-            (hashed_token, now_text),
+            (hashed_token, now_text, submission_count, blocked_until_text),
         )
         db.commit()
     except sqlite3.Error:
@@ -516,6 +558,13 @@ def submit_music_request():
         accepted=True,
         duplicate=duplicate,
         request_count=saved["request_count"],
+        remaining_requests=max(
+            0, MUSIC_REQUESTS_BEFORE_COOLDOWN - submission_count
+        ),
+        cooldown_active=cooldown_active,
+        retry_after=(
+            app.config["MUSIC_REQUEST_COOLDOWN_SECONDS"] if cooldown_active else 0
+        ),
     )
     response.status_code = 201
     return set_guest_cookie(response, token, is_new)
@@ -661,25 +710,6 @@ def delete_all_music_requests():
     return jsonify(deleted=True)
 
 
-@app.route("/musikwunsch/qr")
-def music_request_qr_page():
-    return render_template("music_request_qr.html", music_request_url=MUSIC_REQUEST_URL)
-
-
-@app.route("/musikwunsch/qr-code.png")
-def music_request_qr_code():
-    qr = qrcode.QRCode(version=None, box_size=12, border=3)
-    qr.add_data(MUSIC_REQUEST_URL)
-    qr.make(fit=True)
-    image = qr.make_image(fill_color="#132319", back_color="white")
-    output = io.BytesIO()
-    image.save(output, format="PNG")
-    output.seek(0)
-    response = send_file(output, mimetype="image/png", download_name="musikwunsch-qr.png")
-    response.headers["Cache-Control"] = "public, max-age=86400"
-    return response
-
-
 @app.route("/validate/<tid>")
 def validate(tid):
     db = get_db()
@@ -745,6 +775,8 @@ def validate(tid):
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Ticketprüfung - Jugend Göttlesbrunn</title>
+        <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+        <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
       </head>
       <body style="display:grid;min-height:100vh;margin:0;place-items:center;background:#f6f7f5;text-align:center;font-family:system-ui,sans-serif;color:#172019">
         <main>
@@ -777,7 +809,11 @@ def reset_tickets():
     db.commit()
     return render_template_string(
         """
-        <!doctype html><html lang="de"><meta name="viewport" content="width=device-width">
+        <!doctype html><html lang="de"><head>
+        <meta name="viewport" content="width=device-width">
+        <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+        <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+        </head>
         <body style="text-align:center;font-family:system-ui,sans-serif;padding:3rem">
           <h2 style="color:green">Alle Tickets wurden zurückgesetzt.</h2>
           <small style="color:#6b756e">Technik von Netzl Data Solutions</small>

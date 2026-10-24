@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#111712">
   <title>DJ Leo - Musikwünsche</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
   <style>
     :root {
       color-scheme:dark;
@@ -123,10 +125,6 @@
     <details>
       <summary>Weitere Aktionen</summary>
       <div class="settings">
-        <div class="settings-row">
-          <div class="settings-copy"><strong>QR-Seite</strong><small>Druckvorlage für die Tische</small></div>
-          <a href="{{ url_for('music_request_qr_page') }}" target="_blank" rel="noopener">Öffnen</a>
-        </div>
         <div class="settings-row">
           <div class="settings-copy"><strong>Alle Wünsche löschen</strong><small>Für das Ende der Veranstaltung</small></div>
           <button id="delete-all" class="danger" type="button">Löschen</button>
