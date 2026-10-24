@@ -353,7 +353,7 @@ def set_response_headers(response):
 
 @app.route("/")
 def home():
-    return render_template("index.html")
+    return redirect("https://www.netzldatasolutions.at/", code=302)
 
 
 @app.route("/musikwunsch")
@@ -783,7 +783,7 @@ def validate(tid):
           <h1 style="color:{{ color }}">{{ message }}</h1>
           {% if detail %}<p style="font-size:1.25em">{{ detail }}</p>{% endif %}
           {% if count is not none %}<p style="font-size:1.25em">Bereits eingescannt: <strong>{{ count }}</strong></p>{% endif %}
-          <small style="display:block;margin-top:3rem;color:#6b756e">Technik von Netzl Data Solutions</small>
+          <small style="display:block;margin-top:3rem;color:#6b756e">Technik von <a href="https://www.netzldatasolutions.at/" target="_blank" rel="noopener" style="color:inherit">Netzl Data Solutions</a></small>
         </main>
       </body>
     </html>
@@ -816,7 +816,7 @@ def reset_tickets():
         </head>
         <body style="text-align:center;font-family:system-ui,sans-serif;padding:3rem">
           <h2 style="color:green">Alle Tickets wurden zurückgesetzt.</h2>
-          <small style="color:#6b756e">Technik von Netzl Data Solutions</small>
+          <small style="color:#6b756e">Technik von <a href="https://www.netzldatasolutions.at/" target="_blank" rel="noopener" style="color:inherit">Netzl Data Solutions</a></small>
         </body></html>
         """
     )

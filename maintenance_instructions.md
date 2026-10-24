@@ -124,6 +124,7 @@ MUSIC_REQUEST_COOLDOWN_SECONDS=600
 After the restart, verify these routes:
 
 ```text
+https://jugend.netzldatasolutions.at/ -> https://www.netzldatasolutions.at/
 https://jugend.netzldatasolutions.at/musikwunsch
 https://jugend.netzldatasolutions.at/dj/musikwunsch
 ```

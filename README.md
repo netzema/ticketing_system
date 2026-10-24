@@ -55,6 +55,7 @@ The Oktoberfest music request flow is part of the same Flask application:
 
 * Guest form: `https://jugend.netzldatasolutions.at/musikwunsch`
 * DJ dashboard: `https://jugend.netzldatasolutions.at/dj/musikwunsch`
+* The subdomain root redirects to `https://www.netzldatasolutions.at/`
 
 Before starting Gunicorn, configure these environment variables:
 

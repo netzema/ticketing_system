@@ -59,7 +59,7 @@
       line-height:1.4;
     }
     .notice strong { color:#fff; }
-    form { position:relative; }
+    #request-form { position:relative; margin-top:20px; }
     .field + .field { margin-top:9px; }
     label { display:block; margin-bottom:9px; color:#eaf0eb; font-size:.86rem; font-weight:750; }
     input[type="text"] {
@@ -148,7 +148,8 @@
     dialog p { margin:0 0 18px; color:#c5cfc7; line-height:1.5; }
     dialog button { margin-top:0; }
     footer { margin-top:auto; padding-top:16px; color:#6f7d73; font-size:.69rem; text-align:center; }
-    footer strong { color:#8d9a91; font-weight:650; }
+    footer a { color:#8d9a91; font-weight:650; text-decoration:none; }
+    footer a:hover, footer a:focus-visible { color:#b5c0b8; text-decoration:underline; }
     @media (max-height:700px) {
       main { padding:28px 0 20px; }
     }
@@ -217,7 +218,7 @@
       </form>
     </main>
 
-    <footer>Technik von <strong>Netzl Data Solutions</strong></footer>
+    <footer>Technik von <a href="https://www.netzldatasolutions.at/" target="_blank" rel="noopener">Netzl Data Solutions</a></footer>
   </div>
 
   <div id="success-overlay" class="success-overlay" role="status" aria-live="assertive" hidden>

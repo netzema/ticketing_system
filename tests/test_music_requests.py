@@ -69,7 +69,7 @@ class MusicRequestAppTests(unittest.TestCase):
         )
 
     def test_all_interfaces_are_branded_and_contain_no_middle_dots(self):
-        public_paths = ["/", "/scan", "/musikwunsch"]
+        public_paths = ["/scan", "/musikwunsch"]
         for path in public_paths:
             with self.subTest(path=path):
                 response = self.client.get(path)
@@ -110,6 +110,12 @@ class MusicRequestAppTests(unittest.TestCase):
         self.assertIn('/static/favicon.svg', ticket_text)
         self.assertIn('/static/apple-touch-icon.png', ticket_text)
 
+    def test_subdomain_root_redirects_to_company_website(self):
+        response = self.client.get("/", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "https://www.netzldatasolutions.at/")
+
     def test_icon_assets_are_served(self):
         favicon = self.client.get("/static/favicon.svg")
         apple_icon = self.client.get("/static/apple-touch-icon.png")
@@ -134,6 +140,11 @@ class MusicRequestAppTests(unittest.TestCase):
         self.assertIn("Musikwunsch gesendet", page)
         self.assertIn("}, 1800);", page)
         self.assertIn('id="paused-dialog"', page)
+        self.assertIn("#request-form { position:relative; margin-top:20px; }", page)
+        self.assertIn(
+            'href="https://www.netzldatasolutions.at/" target="_blank" rel="noopener">Netzl Data Solutions</a>',
+            page,
+        )
         self.assertLess(
             page.index('id="submit-button"'),
             page.index("Dein Wunsch ist keine Garantie"),

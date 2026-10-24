@@ -81,7 +81,8 @@
     .settings .danger { color:#f3aaa4; }
     .logout-form { margin:0; }
     footer { margin-top:16px; color:#606b62; font-size:.62rem; text-align:center; }
-    footer strong { color:#7a857c; }
+    footer a { color:#7a857c; font-weight:650; text-decoration:none; }
+    footer a:hover, footer a:focus-visible { color:#aeb8b0; text-decoration:underline; }
     .snackbar { position:fixed; z-index:20; left:50%; bottom:max(16px, env(safe-area-inset-bottom)); display:flex; width:calc(100% - 28px); max-width:500px; min-height:54px; align-items:center; justify-content:space-between; gap:12px; padding:11px 12px 11px 16px; transform:translateX(-50%); border:1px solid #3d4a40; border-radius:14px; background:#edf5ef; color:#15231a; box-shadow:0 16px 50px rgba(0,0,0,.42); font-size:.8rem; font-weight:700; }
     .snackbar[hidden] { display:none; }
     .snackbar button { min-height:34px; border:0; border-radius:8px; background:#193f25; color:#fff; font-size:.72rem; font-weight:800; }
@@ -138,7 +139,7 @@
         </div>
       </div>
     </details>
-    <footer>Technik von <strong>Netzl Data Solutions</strong></footer>
+    <footer>Technik von <a href="https://www.netzldatasolutions.at/" target="_blank" rel="noopener">Netzl Data Solutions</a></footer>
   </main>
 
   <div id="snackbar" class="snackbar" role="status" aria-live="polite" hidden>

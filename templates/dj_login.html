@@ -32,7 +32,8 @@
     button:disabled, input:disabled { opacity:.5; cursor:not-allowed; }
     .error { margin:0 0 14px; padding:11px 12px; border-radius:11px; background:rgba(255,105,97,.13); color:#ffc2bd; font-size:.85rem; }
     footer { margin-top:24px; color:#6e7a70; font-size:.69rem; text-align:center; }
-    footer strong { color:#8d998f; }
+    footer a { color:#8d998f; font-weight:650; text-decoration:none; }
+    footer a:hover, footer a:focus-visible { color:#b5c0b8; text-decoration:underline; }
   </style>
 </head>
 <body>
@@ -47,7 +48,7 @@
       <input id="password" name="password" type="password" autocomplete="current-password" autofocus {% if not configured %}disabled{% endif %} required>
       <button type="submit" {% if not configured %}disabled{% endif %}>Anmelden</button>
     </form>
-    <footer>Technik von <strong>Netzl Data Solutions</strong></footer>
+    <footer>Technik von <a href="https://www.netzldatasolutions.at/" target="_blank" rel="noopener">Netzl Data Solutions</a></footer>
   </main>
 </body>
 </html>
