@@ -188,6 +188,15 @@ def normalize_music_text(value):
     return "".join(character for character in decomposed if character.isalnum())
 
 
+def secure_text_equals(supplied, expected):
+    if not isinstance(supplied, str) or not isinstance(expected, str):
+        return False
+    return secrets.compare_digest(
+        supplied.encode("utf-8"),
+        expected.encode("utf-8"),
+    )
+
+
 def guest_token():
     token = request.cookies.get(GUEST_COOKIE_NAME, "")
     if re.fullmatch(r"[A-Za-z0-9_-]{24,100}", token):
@@ -253,7 +262,7 @@ def csrf_required(view):
     def wrapped(*args, **kwargs):
         supplied = request.headers.get("X-CSRF-Token", "")
         expected = session.get("csrf_token", "")
-        if not supplied or not expected or not secrets.compare_digest(supplied, expected):
+        if not supplied or not expected or not secure_text_equals(supplied, expected):
             return jsonify(error="Ungültige Sicherheitsanfrage"), 403
         return view(*args, **kwargs)
 
@@ -521,7 +530,7 @@ def dj_login():
     configured = bool(app.config.get("DJ_PASSWORD"))
     if request.method == "POST":
         supplied_csrf = request.form.get("csrf_token", "")
-        if not supplied_csrf or not secrets.compare_digest(supplied_csrf, csrf_token()):
+        if not supplied_csrf or not secure_text_equals(supplied_csrf, csrf_token()):
             abort(400)
         if not configured:
             error = "Der DJ-Zugang ist noch nicht eingerichtet."
@@ -532,7 +541,7 @@ def dj_login():
                 error = "Zu viele Versuche. Bitte warte zehn Minuten."
             else:
                 password = request.form.get("password", "")
-                if secrets.compare_digest(password, app.config["DJ_PASSWORD"]):
+                if secure_text_equals(password, app.config["DJ_PASSWORD"]):
                     db.execute("DELETE FROM dj_login_attempts WHERE client_hash = ?", (key,))
                     db.commit()
                     session.clear()
@@ -550,7 +559,7 @@ def dj_login():
 def dj_logout():
     supplied = request.form.get("csrf_token", "")
     expected = session.get("csrf_token", "")
-    if not supplied or not expected or not secrets.compare_digest(supplied, expected):
+    if not supplied or not expected or not secure_text_equals(supplied, expected):
         abort(400)
     session.clear()
     return redirect(url_for("dj_login"))
@@ -760,7 +769,7 @@ def validate(tid):
 def reset_tickets():
     key = request.args.get("key")
     reset_secret = os.getenv("RESET_SECRET")
-    if not reset_secret or not key or not secrets.compare_digest(key, reset_secret):
+    if not reset_secret or not key or not secure_text_equals(key, reset_secret):
         abort(403)
 
     db = get_db()

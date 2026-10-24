@@ -343,6 +343,14 @@ class MusicRequestAppTests(unittest.TestCase):
         self.assertEqual(blocked.status_code, 200)
         self.assertIn("zehn Minuten", blocked.get_data(as_text=True))
 
+    def test_dj_password_supports_non_ascii_characters(self):
+        music_app.app.config["DJ_PASSWORD"] = "Löwe-singt-über-Österreich"
+
+        response = self.login(password="Löwe-singt-über-Österreich")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/dj/musikwunsch"))
+
     def test_qr_code_is_a_png(self):
         response = self.client.get("/musikwunsch/qr-code.png")
         self.assertEqual(response.status_code, 200)
