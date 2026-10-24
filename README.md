@@ -66,7 +66,7 @@ SESSION_COOKIE_SECURE=1
 MUSIC_REQUEST_COOLDOWN_SECONDS=600
 ```
 
-Guests can send three requests per device before a ten-minute pause starts. The music request tables are added automatically to the current event database on first use. Existing ticket records are not modified. Run the automated regression suite with:
+Guests can send up to three requests per device within any rolling ten-minute window. Requests older than ten minutes no longer count toward the limit. The music request tables are added automatically to the current event database on first use. Existing ticket records are not modified. Run the automated regression suite with:
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -v

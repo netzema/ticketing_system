@@ -83,6 +83,7 @@ def ensure_music_request_schema(db):
             status TEXT NOT NULL DEFAULT 'new'
                 CHECK (status IN ('new', 'later', 'played', 'rejected')),
             request_count INTEGER NOT NULL DEFAULT 1 CHECK (request_count >= 1),
+            sort_order INTEGER NOT NULL,
             created_at TEXT NOT NULL,
             last_requested_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -99,6 +100,12 @@ def ensure_music_request_schema(db):
             last_submitted_at TEXT NOT NULL,
             submission_count INTEGER NOT NULL DEFAULT 0,
             blocked_until TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS music_request_submissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_hash TEXT NOT NULL,
+            submitted_at TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS dj_login_attempts (
@@ -118,10 +125,15 @@ def ensure_music_request_schema(db):
         "artist": "TEXT",
         "normalized_title": "TEXT",
         "normalized_artist": "TEXT",
+        "sort_order": "INTEGER",
     }
     for column, data_type in migration_columns.items():
         if column not in columns:
-            db.execute(f"ALTER TABLE music_requests ADD COLUMN {column} {data_type}")
+            try:
+                db.execute(f"ALTER TABLE music_requests ADD COLUMN {column} {data_type}")
+            except sqlite3.OperationalError as error:
+                if "duplicate column name" not in str(error).casefold():
+                    raise
 
     client_columns = {
         row[1]
@@ -133,9 +145,13 @@ def ensure_music_request_schema(db):
     }
     for column, data_type in client_migration_columns.items():
         if column not in client_columns:
-            db.execute(
-                f"ALTER TABLE music_request_clients ADD COLUMN {column} {data_type}"
-            )
+            try:
+                db.execute(
+                    f"ALTER TABLE music_request_clients ADD COLUMN {column} {data_type}"
+                )
+            except sqlite3.OperationalError as error:
+                if "duplicate column name" not in str(error).casefold():
+                    raise
 
     db.execute(
         """
@@ -150,8 +166,35 @@ def ensure_music_request_schema(db):
            OR normalized_artist IS NULL
         """
     )
+    if db.execute(
+        "SELECT 1 FROM music_requests WHERE sort_order IS NULL LIMIT 1"
+    ).fetchone():
+        status_ordering = {
+            "new": "last_requested_at DESC, id DESC",
+            "later": "updated_at ASC, id ASC",
+            "played": "updated_at DESC, id DESC",
+            "rejected": "updated_at DESC, id DESC",
+        }
+        for status, ordering in status_ordering.items():
+            rows = db.execute(
+                f"SELECT id FROM music_requests WHERE status = ? ORDER BY {ordering}",
+                (status,),
+            ).fetchall()
+            db.executemany(
+                "UPDATE music_requests SET sort_order = ? WHERE id = ?",
+                ((position, row["id"]) for position, row in enumerate(rows)),
+            )
     db.execute(
         "CREATE INDEX IF NOT EXISTS idx_music_requests_status ON music_requests(status, updated_at)"
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_music_requests_order ON music_requests(status, sort_order, id)"
+    )
+    db.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_music_request_submissions_client_time
+        ON music_request_submissions(client_hash, submitted_at)
+        """
     )
     db.execute(
         """
@@ -191,6 +234,33 @@ def requests_are_open(db=None):
         "SELECT value FROM music_request_settings WHERE key = 'accepting_requests'"
     ).fetchone()
     return bool(row and row["value"] == "1")
+
+
+def recent_music_request_submissions(db, hashed_token, now):
+    cutoff = utc_timestamp(
+        now - timedelta(seconds=app.config["MUSIC_REQUEST_COOLDOWN_SECONDS"])
+    )
+    return db.execute(
+        """
+        SELECT submitted_at
+        FROM music_request_submissions
+        WHERE client_hash = ? AND submitted_at > ?
+        ORDER BY submitted_at, id
+        """,
+        (hashed_token, cutoff),
+    ).fetchall()
+
+
+def music_request_retry_after(submissions, now):
+    if len(submissions) < MUSIC_REQUESTS_BEFORE_COOLDOWN:
+        return 0
+    oldest = parse_timestamp(submissions[0]["submitted_at"])
+    if not oldest:
+        return app.config["MUSIC_REQUEST_COOLDOWN_SECONDS"]
+    available_at = oldest + timedelta(
+        seconds=app.config["MUSIC_REQUEST_COOLDOWN_SECONDS"]
+    )
+    return max(1, int((available_at - now).total_seconds() + 0.999))
 
 
 def normalize_music_text(value):
@@ -240,10 +310,21 @@ def serialize_music_request(row):
         "artist": row["artist"] or "",
         "status": row["status"],
         "request_count": row["request_count"],
+        "sort_order": row["sort_order"],
         "created_at": row["created_at"],
         "last_requested_at": row["last_requested_at"],
         "updated_at": row["updated_at"],
     }
+
+
+def next_music_request_order(db, status, place_first):
+    aggregate = "MIN" if place_first else "MAX"
+    row = db.execute(
+        f"SELECT {aggregate}(sort_order) AS edge FROM music_requests WHERE status = ?",
+        (status,),
+    ).fetchone()
+    edge = row["edge"] if row and row["edge"] is not None else 0
+    return edge - 1 if place_first else edge + 1
 
 
 def csrf_token():
@@ -361,17 +442,8 @@ def music_request_page():
     token, is_new = guest_token()
     db = get_db()
     now = utc_now()
-    client_state = db.execute(
-        "SELECT blocked_until FROM music_request_clients WHERE client_hash = ?",
-        (client_hash(token),),
-    ).fetchone()
-    device_retry_after = 0
-    if client_state:
-        blocked_until = parse_timestamp(client_state["blocked_until"])
-        if blocked_until and blocked_until > now:
-            device_retry_after = max(
-                1, int((blocked_until - now).total_seconds() + 0.999)
-            )
+    submissions = recent_music_request_submissions(db, client_hash(token), now)
+    device_retry_after = music_request_retry_after(submissions, now)
     response = app.make_response(
         render_template(
             "music_request.html",
@@ -447,31 +519,35 @@ def submit_music_request():
 
     try:
         db.execute("BEGIN IMMEDIATE")
-        previous_submission = db.execute(
-            """
-            SELECT last_submitted_at, submission_count, blocked_until
-            FROM music_request_clients
-            WHERE client_hash = ?
-            """,
-            (hashed_token,),
-        ).fetchone()
-        submission_count = 0
-        if previous_submission:
-            blocked_until = parse_timestamp(previous_submission["blocked_until"])
-            if blocked_until and blocked_until > now:
-                retry_after = max(
-                    1, int((blocked_until - now).total_seconds() + 0.999)
-                )
-                db.rollback()
-                response = jsonify(
-                    error="Du hast bereits drei Wünsche gesendet. Bitte warte, bevor du weitere sendest.",
-                    retry_after=retry_after,
-                )
-                response.status_code = 429
-                response.headers["Retry-After"] = str(retry_after)
-                return set_guest_cookie(response, token, is_new)
-            if not blocked_until:
-                submission_count = previous_submission["submission_count"] or 0
+        cutoff = utc_timestamp(
+            now - timedelta(seconds=app.config["MUSIC_REQUEST_COOLDOWN_SECONDS"])
+        )
+        db.execute(
+            "DELETE FROM music_request_submissions WHERE submitted_at <= ?",
+            (cutoff,),
+        )
+        submissions = recent_music_request_submissions(db, hashed_token, now)
+        if len(submissions) >= MUSIC_REQUESTS_BEFORE_COOLDOWN:
+            retry_after = music_request_retry_after(submissions, now)
+            blocked_until_text = utc_timestamp(
+                now + timedelta(seconds=retry_after)
+            )
+            db.execute(
+                """
+                UPDATE music_request_clients
+                SET submission_count = ?, blocked_until = ?
+                WHERE client_hash = ?
+                """,
+                (len(submissions), blocked_until_text, hashed_token),
+            )
+            db.commit()
+            response = jsonify(
+                error="Du hast bereits drei Wünsche innerhalb von zehn Minuten gesendet. Bitte warte kurz.",
+                retry_after=retry_after,
+            )
+            response.status_code = 429
+            response.headers["Retry-After"] = str(retry_after)
+            return set_guest_cookie(response, token, is_new)
 
         existing = db.execute(
             """
@@ -499,14 +575,15 @@ def submit_music_request():
             request_id = existing["id"]
             duplicate = True
         else:
+            sort_order = next_music_request_order(db, "new", place_first=True)
             cursor = db.execute(
                 """
                 INSERT INTO music_requests(
                     song, title, artist,
                     normalized_song, normalized_title, normalized_artist,
-                    status, request_count,
+                    status, request_count, sort_order,
                     created_at, last_requested_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, 'new', 1, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, 'new', 1, ?, ?, ?, ?)
                 """,
                 (
                     song,
@@ -515,6 +592,7 @@ def submit_music_request():
                     normalized_song,
                     normalized_title,
                     normalized_artist,
+                    sort_order,
                     now_text,
                     now_text,
                     now_text,
@@ -523,13 +601,22 @@ def submit_music_request():
             request_id = cursor.lastrowid
             duplicate = False
 
-        submission_count += 1
+        db.execute(
+            """
+            INSERT INTO music_request_submissions(client_hash, submitted_at)
+            VALUES (?, ?)
+            """,
+            (hashed_token, now_text),
+        )
+        submissions = recent_music_request_submissions(db, hashed_token, now)
+        submission_count = len(submissions)
         cooldown_active = submission_count >= MUSIC_REQUESTS_BEFORE_COOLDOWN
-        blocked_until_text = None
-        if cooldown_active:
-            blocked_until_text = utc_timestamp(
-                now + timedelta(seconds=app.config["MUSIC_REQUEST_COOLDOWN_SECONDS"])
-            )
+        retry_after = music_request_retry_after(submissions, now)
+        blocked_until_text = (
+            utc_timestamp(now + timedelta(seconds=retry_after))
+            if cooldown_active
+            else None
+        )
 
         db.execute(
             """
@@ -562,9 +649,7 @@ def submit_music_request():
             0, MUSIC_REQUESTS_BEFORE_COOLDOWN - submission_count
         ),
         cooldown_active=cooldown_active,
-        retry_after=(
-            app.config["MUSIC_REQUEST_COOLDOWN_SECONDS"] if cooldown_active else 0
-        ),
+        retry_after=retry_after,
     )
     response.status_code = 201
     return set_guest_cookie(response, token, is_new)
@@ -625,7 +710,7 @@ def dj_dashboard():
 def api_dj_requests():
     db = get_db()
     rows = db.execute(
-        "SELECT * FROM music_requests ORDER BY last_requested_at DESC, id DESC"
+        "SELECT * FROM music_requests ORDER BY status, sort_order, id"
     ).fetchall()
     return jsonify(
         requests=[serialize_music_request(row) for row in rows],
@@ -647,16 +732,29 @@ def update_music_request_status(request_id):
         return jsonify(error="Unbekannter Status"), 400
 
     db = get_db()
+    db.execute("BEGIN IMMEDIATE")
     current = db.execute(
         "SELECT * FROM music_requests WHERE id = ?", (request_id,)
     ).fetchone()
     if not current:
+        db.rollback()
         return jsonify(error="Musikwunsch nicht gefunden"), 404
 
     previous_status = current["status"]
+    sort_order = current["sort_order"]
+    if new_status != previous_status:
+        sort_order = next_music_request_order(
+            db,
+            new_status,
+            place_first=new_status != "later",
+        )
     db.execute(
-        "UPDATE music_requests SET status = ?, updated_at = ? WHERE id = ?",
-        (new_status, utc_timestamp(), request_id),
+        """
+        UPDATE music_requests
+        SET status = ?, sort_order = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (new_status, sort_order, utc_timestamp(), request_id),
     )
     db.commit()
     updated = db.execute(
@@ -666,6 +764,59 @@ def update_music_request_status(request_id):
         request=serialize_music_request(updated),
         previous_status=previous_status,
     )
+
+
+@app.post("/api/dj/musikwunsch/reihenfolge")
+@dj_required
+@csrf_required
+def update_music_request_order():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify(error="Ungültige Anfrage"), 400
+
+    status = payload.get("status")
+    request_ids = payload.get("request_ids")
+    if status not in MUSIC_REQUEST_STATUSES:
+        return jsonify(error="Unbekannter Status"), 400
+    if (
+        not isinstance(request_ids, list)
+        or any(not isinstance(item, int) or isinstance(item, bool) for item in request_ids)
+        or len(request_ids) != len(set(request_ids))
+    ):
+        return jsonify(error="Ungültige Reihenfolge"), 400
+
+    db = get_db()
+    db.execute("BEGIN IMMEDIATE")
+    current_rows = db.execute(
+        """
+        SELECT * FROM music_requests
+        WHERE status = ?
+        ORDER BY sort_order, id
+        """,
+        (status,),
+    ).fetchall()
+    current_ids = [row["id"] for row in current_rows]
+    if set(request_ids) != set(current_ids):
+        db.rollback()
+        return (
+            jsonify(error="Die Liste hat sich geändert. Sie wird neu geladen."),
+            409,
+        )
+
+    db.executemany(
+        "UPDATE music_requests SET sort_order = ? WHERE id = ? AND status = ?",
+        ((position, request_id, status) for position, request_id in enumerate(request_ids)),
+    )
+    db.commit()
+    updated_rows = db.execute(
+        """
+        SELECT * FROM music_requests
+        WHERE status = ?
+        ORDER BY sort_order, id
+        """,
+        (status,),
+    ).fetchall()
+    return jsonify(requests=[serialize_music_request(row) for row in updated_rows])
 
 
 @app.post("/api/dj/musikwunsch/annahme")
@@ -705,6 +856,7 @@ def delete_all_music_requests():
     db = get_db()
     db.execute("BEGIN IMMEDIATE")
     db.execute("DELETE FROM music_requests")
+    db.execute("DELETE FROM music_request_submissions")
     db.execute("DELETE FROM music_request_clients")
     db.commit()
     return jsonify(deleted=True)

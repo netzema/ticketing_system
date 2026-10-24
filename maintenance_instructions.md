@@ -129,4 +129,4 @@ https://jugend.netzldatasolutions.at/musikwunsch
 https://jugend.netzldatasolutions.at/dj/musikwunsch
 ```
 
-The required SQLite tables are created automatically. A device can send three requests before it is paused for the configured ten minutes. The DJ password must never be committed to Git.
+The required SQLite tables are created automatically. A device can send up to three requests within any rolling configured time window; older requests no longer count toward the limit. The DJ password must never be committed to Git.

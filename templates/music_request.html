@@ -346,7 +346,7 @@
           websiteInput.value = "";
           showSuccess();
           if (result.cooldown_active) {
-            showFeedback("Drei Wünsche gesendet - weitere Wünsche sind in zehn Minuten möglich.", "success");
+            showFeedback("Drei Wünsche innerhalb von zehn Minuten - der nächste ist nach Ablauf des Timers möglich.", "success");
             startCountdown(result.retry_after);
           } else {
             showFeedback("", "");

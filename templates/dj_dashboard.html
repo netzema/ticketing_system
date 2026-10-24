@@ -55,7 +55,8 @@
     .section-heading h2 { margin:0; font-size:.86rem; }
     .section-heading span { color:var(--muted); font-size:.62rem; }
     .request-list { display:grid; gap:6px; }
-    .request-card { padding:10px; border:1px solid var(--line); border-radius:13px; background:linear-gradient(145deg, var(--panel-2), var(--panel)); box-shadow:0 7px 20px rgba(0,0,0,.1); }
+    .request-card { position:relative; padding:10px 43px 10px 10px; border:1px solid var(--line); border-radius:13px; background:linear-gradient(145deg, var(--panel-2), var(--panel)); box-shadow:0 7px 20px rgba(0,0,0,.1); transition:border-color .15s ease, box-shadow .15s ease, opacity .15s ease; }
+    .request-card.dragging { z-index:2; border-color:rgba(114,218,146,.5); opacity:.76; box-shadow:0 12px 30px rgba(0,0,0,.3); }
     .request-main { display:grid; grid-template-columns:minmax(0, 1fr) auto; align-items:start; gap:10px; }
     .song { margin:0; overflow-wrap:anywhere; font-size:.96rem; line-height:1.15; letter-spacing:-.012em; }
     .artist { display:block; margin-top:3px; color:#b3bdb5; font-size:.7rem; line-height:1.15; overflow-wrap:anywhere; }
@@ -69,6 +70,13 @@
     .action.later { border-color:rgba(241,198,108,.2); background:var(--amber-dark); color:#f5d99e; }
     .action.rejected { border-color:rgba(240,153,145,.2); background:var(--red-dark); color:#f6bbb5; }
     .action.new { border-color:rgba(143,199,255,.2); background:var(--blue-dark); color:#bddcff; }
+    .drag-handle { position:absolute; top:50%; right:5px; display:grid; width:32px; height:48px; place-items:center; padding:0; transform:translateY(-50%); border:0; border-radius:9px; background:transparent; color:#69756c; touch-action:none; cursor:grab; }
+    .drag-handle::before { content:""; width:14px; height:14px; background:repeating-linear-gradient(to bottom, currentColor 0 2px, transparent 2px 6px); }
+    .drag-handle:hover { color:#98a59b; background:rgba(255,255,255,.035); }
+    .drag-handle:active { cursor:grabbing; }
+    .drag-handle:focus-visible { outline:2px solid var(--green); outline-offset:1px; color:#b5c0b7; }
+    .drag-handle:disabled { color:#475149; cursor:default; opacity:.35; }
+    body.is-reordering { overflow-x:hidden; user-select:none; }
     .empty { padding:42px 20px; border:1px dashed var(--line); border-radius:18px; color:var(--muted); text-align:center; }
     .empty strong { display:block; margin-bottom:6px; color:#d6dcd7; }
     details { margin-top:16px; border-top:1px solid var(--line); }
@@ -165,7 +173,9 @@
       activeStatus:"new",
       acceptingRequests:true,
       csrfToken:{{ csrf_token()|tojson }},
-      undo:null
+      undo:null,
+      drag:null,
+      savingOrder:false
     };
 
     const requestList = document.getElementById("request-list");
@@ -221,12 +231,12 @@
     function filteredRequests() {
       const query = searchInput.value.trim().toLocaleLowerCase("de");
       const items = state.requests.filter(item => item.status === state.activeStatus && (!query || item.song.toLocaleLowerCase("de").includes(query)));
-      items.sort((a, b) => {
-        const aTime = new Date(state.activeStatus === "new" ? a.last_requested_at : a.updated_at).getTime();
-        const bTime = new Date(state.activeStatus === "new" ? b.last_requested_at : b.updated_at).getTime();
-        return state.activeStatus === "later" ? aTime - bTime : bTime - aTime;
-      });
+      items.sort((a, b) => (a.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.sort_order ?? Number.MAX_SAFE_INTEGER) || a.id - b.id);
       return items;
+    }
+
+    function reorderIsAvailable() {
+      return !searchInput.value.trim() && !state.savingOrder;
     }
 
     function createAction(item, action) {
@@ -238,9 +248,22 @@
       return button;
     }
 
+    function createDragHandle(item, card) {
+      const handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = "drag-handle";
+      handle.disabled = !reorderIsAvailable();
+      handle.setAttribute("aria-label", `${item.title || item.song} verschieben`);
+      handle.title = handle.disabled ? "Zum Sortieren zuerst die Suche leeren" : "Ziehen oder mit den Pfeiltasten verschieben";
+      handle.addEventListener("pointerdown", event => startPointerReorder(event, item, card, handle));
+      handle.addEventListener("keydown", event => keyboardReorder(event, item));
+      return handle;
+    }
+
     function createCard(item) {
       const card = document.createElement("article");
       card.className = "request-card";
+      card.dataset.requestId = String(item.id);
       const main = document.createElement("div");
       main.className = "request-main";
       const track = document.createElement("div");
@@ -268,7 +291,7 @@
       const actions = document.createElement("div");
       actions.className = "actions";
       actionSets[item.status].forEach(action => actions.appendChild(createAction(item, action)));
-      card.append(main, meta, actions);
+      card.append(main, actions, createDragHandle(item, card));
       return card;
     }
 
@@ -291,6 +314,123 @@
         return;
       }
       items.forEach(item => requestList.appendChild(createCard(item)));
+    }
+
+    function requestIdsInDom() {
+      return Array.from(requestList.querySelectorAll(".request-card"), card => Number(card.dataset.requestId));
+    }
+
+    function applyLocalOrder(status, requestIds) {
+      const positions = new Map(requestIds.map((id, index) => [id, index]));
+      state.requests = state.requests.map(item => (
+        item.status === status && positions.has(item.id)
+          ? {...item, sort_order:positions.get(item.id)}
+          : item
+      ));
+    }
+
+    function focusDragHandle(requestId) {
+      const handle = requestList.querySelector(`[data-request-id="${requestId}"] .drag-handle`);
+      if (handle) handle.focus();
+    }
+
+    async function persistOrder(status, requestIds, movedId, restoreFocus = false) {
+      state.savingOrder = true;
+      applyLocalOrder(status, requestIds);
+      render();
+      if (restoreFocus) focusDragHandle(movedId);
+      try {
+        const result = await api("/api/dj/musikwunsch/reihenfolge", {
+          method:"POST",
+          body:JSON.stringify({status, request_ids:requestIds})
+        });
+        const updated = new Map(result.requests.map(item => [item.id, item]));
+        state.requests = state.requests.map(item => updated.get(item.id) || item);
+        showSnackbar("Reihenfolge gespeichert");
+      } catch (error) {
+        await refresh(true);
+        showSnackbar(error.message);
+      } finally {
+        state.savingOrder = false;
+        render();
+        if (restoreFocus) focusDragHandle(movedId);
+      }
+    }
+
+    function startPointerReorder(event, item, card, handle) {
+      if (!reorderIsAvailable() || event.button !== 0 || !event.isPrimary) return;
+      event.preventDefault();
+      state.drag = {
+        pointerId:event.pointerId,
+        itemId:item.id,
+        status:item.status,
+        card,
+        handle,
+        startX:event.clientX,
+        startY:event.clientY,
+        originalIds:requestIdsInDom(),
+        moved:false
+      };
+      handle.setPointerCapture(event.pointerId);
+      card.classList.add("dragging");
+      document.body.classList.add("is-reordering");
+    }
+
+    function movePointerReorder(event) {
+      const drag = state.drag;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 7) return;
+      drag.moved = true;
+
+      if (event.clientY < 72) window.scrollBy(0, -12);
+      if (event.clientY > window.innerHeight - 72) window.scrollBy(0, 12);
+
+      const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(".request-card");
+      if (!target || target === drag.card || target.parentElement !== requestList) return;
+      const bounds = target.getBoundingClientRect();
+      const sameRow = event.clientY >= bounds.top && event.clientY <= bounds.bottom;
+      const insertBefore = event.clientY < bounds.top + bounds.height / 2
+        || (sameRow && Math.abs(event.clientY - (bounds.top + bounds.height / 2)) < bounds.height * .25 && event.clientX < bounds.left + bounds.width / 2);
+      requestList.insertBefore(drag.card, insertBefore ? target : target.nextSibling);
+    }
+
+    function cleanupPointerReorder() {
+      if (!state.drag) return;
+      state.drag.card.classList.remove("dragging");
+      document.body.classList.remove("is-reordering");
+      state.drag = null;
+    }
+
+    function finishPointerReorder(event) {
+      const drag = state.drag;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      const requestIds = requestIdsInDom();
+      const changed = drag.moved && requestIds.some((id, index) => id !== drag.originalIds[index]);
+      const {status, itemId} = drag;
+      cleanupPointerReorder();
+      if (changed) persistOrder(status, requestIds, itemId);
+    }
+
+    function cancelPointerReorder(event) {
+      const drag = state.drag;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      const {originalIds, status} = drag;
+      cleanupPointerReorder();
+      applyLocalOrder(status, originalIds);
+      render();
+    }
+
+    function keyboardReorder(event, item) {
+      if (!reorderIsAvailable() || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+      event.preventDefault();
+      const items = filteredRequests();
+      const currentIndex = items.findIndex(entry => entry.id === item.id);
+      const nextIndex = currentIndex + (event.key === "ArrowUp" ? -1 : 1);
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= items.length) return;
+      const requestIds = items.map(entry => entry.id);
+      [requestIds[currentIndex], requestIds[nextIndex]] = [requestIds[nextIndex], requestIds[currentIndex]];
+      persistOrder(item.status, requestIds, item.id, true);
     }
 
     function showSnackbar(message, undo = null) {
@@ -349,6 +489,9 @@
       });
     });
     searchInput.addEventListener("input", render);
+    document.addEventListener("pointermove", movePointerReorder, {passive:false});
+    document.addEventListener("pointerup", finishPointerReorder);
+    document.addEventListener("pointercancel", cancelPointerReorder);
 
     acceptanceButton.addEventListener("click", async () => {
       acceptanceButton.disabled = true;
@@ -393,7 +536,7 @@
 
     refresh();
     window.setInterval(() => {
-      if (!document.hidden) refresh(true);
+      if (!document.hidden && !state.drag && !state.savingOrder) refresh(true);
     }, 5000);
   </script>
 </body>

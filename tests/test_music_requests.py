@@ -1,4 +1,5 @@
 import concurrent.futures
+from datetime import timedelta
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -167,6 +168,8 @@ class MusicRequestAppTests(unittest.TestCase):
         self.assertIn('headers: { "Accept": "application/json" }', scanner)
         self.assertIn('result.status === "recent"', scanner)
         self.assertIn('result.status === "already_used"', scanner)
+        self.assertIn("grid-column:3", scanner)
+        self.assertIn("justify-self:end", scanner)
         self.assertNotIn("DOMParser", scanner)
         self.assertNotIn("response.text()", scanner)
 
@@ -221,7 +224,8 @@ class MusicRequestAppTests(unittest.TestCase):
         self.assertEqual(third.status_code, 201)
         self.assertEqual(third.get_json()["remaining_requests"], 0)
         self.assertTrue(third.get_json()["cooldown_active"])
-        self.assertEqual(third.get_json()["retry_after"], 600)
+        self.assertGreaterEqual(third.get_json()["retry_after"], 599)
+        self.assertLessEqual(third.get_json()["retry_after"], 600)
         self.assertEqual(fourth.status_code, 429)
         self.assertGreaterEqual(fourth.get_json()["retry_after"], 599)
         self.assertIn("Retry-After", fourth.headers)
@@ -232,8 +236,15 @@ class MusicRequestAppTests(unittest.TestCase):
 
         database = self.database()
         database.execute(
-            "UPDATE music_request_clients SET blocked_until = ?",
+            "UPDATE music_request_submissions SET submitted_at = ?",
             ("2000-01-01T00:00:00+00:00",),
+        )
+        database.execute(
+            """
+            UPDATE music_request_clients
+            SET submission_count = 3, blocked_until = ?
+            """,
+            ("2999-01-01T00:00:00+00:00",),
         )
         database.commit()
         database.close()
@@ -242,6 +253,115 @@ class MusicRequestAppTests(unittest.TestCase):
         self.assertEqual(after_pause.status_code, 201)
         self.assertEqual(after_pause.get_json()["remaining_requests"], 2)
         self.assertFalse(after_pause.get_json()["cooldown_active"])
+
+    def test_request_limit_only_counts_the_rolling_ten_minute_window(self):
+        first = self.submit("Early Song One", "Early Artist One")
+        second = self.submit("Early Song Two", "Early Artist Two")
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 201)
+
+        database = self.database()
+        database.execute(
+            "UPDATE music_request_submissions SET submitted_at = ?",
+            ("2000-01-01T00:00:00+00:00",),
+        )
+        database.commit()
+        database.close()
+
+        third = self.submit("Later Song Three", "Later Artist Three")
+        fourth = self.submit("Later Song Four", "Later Artist Four")
+        fifth = self.submit("Later Song Five", "Later Artist Five")
+        sixth = self.client.post(
+            "/api/musikwunsch",
+            json={
+                "title": "Later Song Six",
+                "artist": "Later Artist Six",
+                "website": "",
+            },
+        )
+
+        self.assertEqual(third.status_code, 201)
+        self.assertEqual(third.get_json()["remaining_requests"], 2)
+        self.assertEqual(fourth.status_code, 201)
+        self.assertEqual(fourth.get_json()["remaining_requests"], 1)
+        self.assertEqual(fifth.status_code, 201)
+        self.assertEqual(fifth.get_json()["remaining_requests"], 0)
+        self.assertEqual(sixth.status_code, 429)
+
+    def test_rolling_limit_expires_from_the_oldest_recent_request(self):
+        self.assertEqual(self.submit("Song One", "Artist One").status_code, 201)
+        self.assertEqual(self.submit("Song Two", "Artist Two").status_code, 201)
+        self.assertEqual(self.submit("Song Three", "Artist Three").status_code, 201)
+
+        nine_minutes_ago = music_app.utc_timestamp(
+            music_app.utc_now() - timedelta(minutes=9)
+        )
+        database = self.database()
+        oldest_id = database.execute(
+            "SELECT MIN(id) FROM music_request_submissions"
+        ).fetchone()[0]
+        database.execute(
+            "UPDATE music_request_submissions SET submitted_at = ? WHERE id = ?",
+            (nine_minutes_ago, oldest_id),
+        )
+        database.commit()
+        database.close()
+
+        still_blocked = self.client.post(
+            "/api/musikwunsch",
+            json={"title": "Song Four", "artist": "Artist Four", "website": ""},
+        )
+        self.assertEqual(still_blocked.status_code, 429)
+        self.assertGreaterEqual(still_blocked.get_json()["retry_after"], 59)
+        self.assertLessEqual(still_blocked.get_json()["retry_after"], 60)
+
+        eleven_minutes_ago = music_app.utc_timestamp(
+            music_app.utc_now() - timedelta(minutes=11)
+        )
+        database = self.database()
+        database.execute(
+            "UPDATE music_request_submissions SET submitted_at = ? WHERE id = ?",
+            (eleven_minutes_ago, oldest_id),
+        )
+        database.commit()
+        database.close()
+
+        allowed = self.submit("Song Four", "Artist Four")
+        self.assertEqual(allowed.status_code, 201)
+        self.assertEqual(allowed.get_json()["remaining_requests"], 0)
+
+    def test_concurrent_requests_cannot_exceed_the_window_limit(self):
+        self.assertEqual(self.submit("First Song", "First Artist").status_code, 201)
+        self.assertEqual(self.submit("Second Song", "Second Artist").status_code, 201)
+        guest_cookie = self.client.get_cookie(music_app.GUEST_COOKIE_NAME).value
+
+        def submit_from_same_device(song_data):
+            client = music_app.app.test_client()
+            client.set_cookie(music_app.GUEST_COOKIE_NAME, guest_cookie)
+            title, artist = song_data
+            return client.post(
+                "/api/musikwunsch",
+                json={"title": title, "artist": artist, "website": ""},
+            ).status_code
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            status_codes = list(
+                executor.map(
+                    submit_from_same_device,
+                    [
+                        ("Third Song", "Third Artist"),
+                        ("Fourth Song", "Fourth Artist"),
+                    ],
+                )
+            )
+
+        self.assertEqual(sorted(status_codes), [201, 429])
+        database = self.database()
+        submission_count = database.execute(
+            "SELECT COUNT(*) FROM music_request_submissions"
+        ).fetchone()[0]
+        database.close()
+        self.assertEqual(submission_count, 3)
 
     def test_invalid_input_honeypot_and_paused_state(self):
         self.client.get("/musikwunsch")
@@ -367,6 +487,137 @@ class MusicRequestAppTests(unittest.TestCase):
         )
         self.assertEqual(invalid.status_code, 400)
 
+    def test_dj_can_persist_custom_request_order(self):
+        self.assertEqual(self.submit("First Song", "First Artist").status_code, 201)
+        self.assertEqual(self.submit("Second Song", "Second Artist").status_code, 201)
+        self.assertEqual(self.submit("Third Song", "Third Artist").status_code, 201)
+        self.assertEqual(self.login().status_code, 302)
+
+        state = self.dj_api_state()
+        current = [item for item in state["requests"] if item["status"] == "new"]
+        self.assertEqual(
+            [item["title"] for item in current],
+            ["Third Song", "Second Song", "First Song"],
+        )
+        desired_ids = [current[2]["id"], current[0]["id"], current[1]["id"]]
+
+        reordered = self.client.post(
+            "/api/dj/musikwunsch/reihenfolge",
+            json={"status": "new", "request_ids": desired_ids},
+            headers={"X-CSRF-Token": state["csrf_token"]},
+        )
+
+        self.assertEqual(reordered.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in reordered.get_json()["requests"]], desired_ids
+        )
+        refreshed = [
+            item
+            for item in self.dj_api_state()["requests"]
+            if item["status"] == "new"
+        ]
+        self.assertEqual([item["id"] for item in refreshed], desired_ids)
+        self.assertEqual([item["sort_order"] for item in refreshed], [0, 1, 2])
+
+        another_guest = music_app.app.test_client()
+        newest = self.submit("Newest Song", "Newest Artist", another_guest)
+        self.assertEqual(newest.status_code, 201)
+        with_new_request = [
+            item
+            for item in self.dj_api_state()["requests"]
+            if item["status"] == "new"
+        ]
+        self.assertEqual(with_new_request[0]["title"], "Newest Song")
+        self.assertEqual(
+            [item["id"] for item in with_new_request[1:]], desired_ids
+        )
+
+    def test_dj_order_endpoint_rejects_unsafe_or_stale_lists(self):
+        self.assertEqual(self.submit("One Song", "One Artist").status_code, 201)
+        self.assertEqual(self.submit("Two Song", "Two Artist").status_code, 201)
+        self.assertEqual(self.login().status_code, 302)
+        state = self.dj_api_state()
+        request_ids = [item["id"] for item in state["requests"]]
+
+        missing_csrf = self.client.post(
+            "/api/dj/musikwunsch/reihenfolge",
+            json={"status": "new", "request_ids": request_ids},
+        )
+        self.assertEqual(missing_csrf.status_code, 403)
+
+        headers = {"X-CSRF-Token": state["csrf_token"]}
+        duplicate = self.client.post(
+            "/api/dj/musikwunsch/reihenfolge",
+            json={"status": "new", "request_ids": [request_ids[0], request_ids[0]]},
+            headers=headers,
+        )
+        self.assertEqual(duplicate.status_code, 400)
+
+        boolean_id = self.client.post(
+            "/api/dj/musikwunsch/reihenfolge",
+            json={"status": "new", "request_ids": [True, request_ids[1]]},
+            headers=headers,
+        )
+        self.assertEqual(boolean_id.status_code, 400)
+
+        stale = self.client.post(
+            "/api/dj/musikwunsch/reihenfolge",
+            json={"status": "new", "request_ids": request_ids[:1]},
+            headers=headers,
+        )
+        self.assertEqual(stale.status_code, 409)
+        self.assertIn("neu geladen", stale.get_json()["error"])
+
+    def test_status_changes_use_predictable_queue_positions(self):
+        self.assertEqual(self.submit("Alpha Song", "Alpha Artist").status_code, 201)
+        self.assertEqual(self.submit("Beta Song", "Beta Artist").status_code, 201)
+        self.assertEqual(self.login().status_code, 302)
+        state = self.dj_api_state()
+        by_title = {item["title"]: item for item in state["requests"]}
+        headers = {"X-CSRF-Token": state["csrf_token"]}
+
+        for title in ("Beta Song", "Alpha Song"):
+            response = self.client.post(
+                f"/api/dj/musikwunsch/{by_title[title]['id']}/status",
+                json={"status": "later"},
+                headers=headers,
+            )
+            self.assertEqual(response.status_code, 200)
+        later = [
+            item
+            for item in self.dj_api_state()["requests"]
+            if item["status"] == "later"
+        ]
+        self.assertEqual([item["title"] for item in later], ["Beta Song", "Alpha Song"])
+
+        for title in ("Beta Song", "Alpha Song"):
+            response = self.client.post(
+                f"/api/dj/musikwunsch/{by_title[title]['id']}/status",
+                json={"status": "played"},
+                headers=headers,
+            )
+            self.assertEqual(response.status_code, 200)
+        played = [
+            item
+            for item in self.dj_api_state()["requests"]
+            if item["status"] == "played"
+        ]
+        self.assertEqual([item["title"] for item in played], ["Alpha Song", "Beta Song"])
+
+    def test_dj_dashboard_exposes_touch_and_keyboard_reordering(self):
+        self.assertEqual(self.login().status_code, 302)
+        dashboard = self.client.get("/dj/musikwunsch").get_data(as_text=True)
+
+        self.assertIn('handle.className = "drag-handle"', dashboard)
+        self.assertIn('handle.addEventListener("pointerdown"', dashboard)
+        self.assertIn('handle.addEventListener("keydown"', dashboard)
+        self.assertIn('document.addEventListener("pointermove"', dashboard)
+        self.assertIn('document.addEventListener("pointerup"', dashboard)
+        self.assertIn('["ArrowUp", "ArrowDown"]', dashboard)
+        self.assertIn("touch-action:none", dashboard)
+        self.assertIn("/api/dj/musikwunsch/reihenfolge", dashboard)
+        self.assertIn("setPointerCapture", dashboard)
+
     def test_played_song_can_be_requested_again_as_new(self):
         self.assertEqual(self.submit("Angels", "Robbie Williams").status_code, 201)
         self.assertEqual(self.login().status_code, 302)
@@ -410,6 +661,14 @@ class MusicRequestAppTests(unittest.TestCase):
         )
         self.assertEqual(deleted.status_code, 200)
         self.assertEqual(self.dj_api_state()["requests"], [])
+        database = self.database()
+        self.assertEqual(
+            database.execute(
+                "SELECT COUNT(*) FROM music_request_submissions"
+            ).fetchone()[0],
+            0,
+        )
+        database.close()
 
     def test_login_is_temporarily_blocked_after_repeated_failures(self):
         page = self.client.get("/dj/musikwunsch/anmelden")
@@ -548,15 +807,32 @@ class MusicRequestAppTests(unittest.TestCase):
             row[1]
             for row in database.execute("PRAGMA table_info(music_request_clients)")
         }
+        submission_columns = {
+            row[1]
+            for row in database.execute(
+                "PRAGMA table_info(music_request_submissions)"
+            )
+        }
         row = database.execute("SELECT * FROM music_requests").fetchone()
         database.close()
 
         self.assertTrue(
-            {"title", "artist", "normalized_title", "normalized_artist"}.issubset(columns)
+            {
+                "title",
+                "artist",
+                "normalized_title",
+                "normalized_artist",
+                "sort_order",
+            }.issubset(columns)
         )
         self.assertTrue({"submission_count", "blocked_until"}.issubset(client_columns))
+        self.assertEqual(
+            submission_columns,
+            {"id", "client_hash", "submitted_at"},
+        )
         self.assertEqual(row["title"], "Legacy Song - Legacy Artist")
         self.assertEqual(row["artist"], "")
+        self.assertEqual(row["sort_order"], 0)
 
 
 if __name__ == "__main__":
