@@ -35,7 +35,7 @@ MUSIC_REQUEST_URL = os.getenv(
     "MUSIC_REQUEST_URL",
     "https://jugend.netzldatasolutions.at/musikwunsch",
 )
-SCANNER_VERSION = "2026-10-22.2"
+SCANNER_VERSION = "2026-10-24.1"
 MUSIC_REQUEST_STATUSES = {"new", "later", "played", "rejected"}
 GUEST_COOKIE_NAME = "oktoberfest_musikwunsch"
 
@@ -788,7 +788,7 @@ def reset_tickets():
 
 @app.route("/scan")
 def scan():
-    return render_template("scan.html")
+    return render_template("scan.html", scanner_version=SCANNER_VERSION)
 
 
 if __name__ == "__main__":

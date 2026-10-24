@@ -103,6 +103,13 @@ class MusicRequestAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         scanner = response.get_data(as_text=True)
 
+        self.assertEqual(response.headers["X-Scanner-Version"], "2026-10-24.1")
+        self.assertIn('data-scanner-version="2026-10-24.1"', scanner)
+        self.assertIn('id="topbar"', scanner)
+        self.assertIn('id="scan-delay"', scanner)
+        self.assertIn('value="1500" selected', scanner)
+        self.assertIn("oktoberfest-scanner-delay-ms", scanner)
+        self.assertIn("getScanDelay()", scanner)
         self.assertIn("decodeFromVideoDevice", scanner)
         self.assertIn("isInsideScanWindow", scanner)
         self.assertIn('headers: { "Accept": "application/json" }', scanner)

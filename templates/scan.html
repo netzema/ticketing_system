@@ -61,42 +61,57 @@
       pointer-events:none;
     }
 
-    #brand {
+    #topbar {
       position:fixed;
       z-index:4;
-      top:max(18px, env(safe-area-inset-top));
-      left:20px;
-      display:flex;
+      top:0;
+      left:0;
+      right:0;
+      display:grid;
+      grid-template-columns:auto minmax(0, 1fr) auto;
       align-items:center;
-      gap:10px;
+      gap:12px;
+      min-height:64px;
+      padding:max(10px, env(safe-area-inset-top)) 14px 10px;
+      background:#fff;
+      color:#142018;
+      box-shadow:0 5px 24px rgba(0,0,0,.22);
       text-align:left;
-      text-shadow:0 1px 10px rgba(0,0,0,.8);
-      pointer-events:none;
     }
 
     .brand-logo {
       display:flex;
-      width:118px;
-      height:40px;
+      width:112px;
       align-items:center;
-      padding:6px 10px;
-      border:1px solid rgba(255,255,255,.22);
-      border-radius:11px;
-      background:rgba(255,255,255,.94);
-      box-shadow:0 5px 18px rgba(0,0,0,.2);
     }
 
     .brand-logo img { display:block; width:100%; height:auto; }
-    .brand-name { font-size:.8rem; font-weight:720; line-height:1.05; }
-    .brand-event {
-      display:block;
-      margin-top:4px;
-      color:rgba(255,255,255,.72);
+    .brand-name { display:flex; overflow:hidden; flex-direction:column; font-size:.8rem; font-weight:760; line-height:1.05; white-space:nowrap; }
+    .brand-name small { margin-top:3px; color:#7a857d; font-size:.56rem; font-weight:620; }
+    .delay-control {
+      display:flex;
+      align-items:center;
+      gap:6px;
+      color:#5a655e;
       font-size:.69rem;
-      font-weight:620;
-      letter-spacing:.08em;
-      text-transform:uppercase;
+      font-weight:720;
+      white-space:nowrap;
     }
+
+    .delay-control select {
+      min-height:36px;
+      padding:0 8px;
+      border:1px solid #d9dfdb;
+      border-radius:10px;
+      outline:none;
+      background:#f3f6f4;
+      color:#142018;
+      font:inherit;
+      font-size:.76rem;
+      font-weight:780;
+    }
+
+    .delay-control select:focus { border-color:#70b646; box-shadow:0 0 0 3px rgba(112,182,70,.18); }
 
     #scan-window {
       position:absolute;
@@ -223,17 +238,32 @@
     #status.warning #status-icon { background:var(--amber); color:#302000; }
 
     @media (max-height:620px) {
-      #brand { top:10px; transform:scale(.9); transform-origin:left top; }
       #scan-window { top:44%; width:min(76vw, 58dvh, 420px); }
       #hint { font-size:.82rem; }
       #status { min-height:58px; padding:9px 13px; }
     }
+
+    @media (max-width:370px) {
+      #topbar { gap:8px; padding-left:10px; padding-right:10px; }
+      .brand-logo { width:96px; }
+      .brand-name { display:none; }
+    }
   </style>
 </head>
-<body>
-  <header id="brand" aria-label="Netzl Data Solutions - Jugend Göttlesbrunn">
+<body data-scanner-version="{{ scanner_version }}">
+  <header id="topbar" aria-label="Scanner-Einstellungen">
     <span class="brand-logo"><img src="/static/netzl-logo.svg" alt="Netzl Data Solutions"></span>
-    <span class="brand-name">Einlass<span class="brand-event">Oktoberfest 2026</span></span>
+    <span class="brand-name">Einlass<small>Netzl Data Solutions</small></span>
+    <label class="delay-control" for="scan-delay">
+      Pause
+      <select id="scan-delay" aria-label="Zeit zwischen zwei Scans">
+        <option value="1000">1,0 s</option>
+        <option value="1500" selected>1,5 s</option>
+        <option value="2000">2,0 s</option>
+        <option value="3000">3,0 s</option>
+        <option value="5000">5,0 s</option>
+      </select>
+    </label>
   </header>
 
   <main id="scanner">
@@ -260,8 +290,35 @@
     const statusIcon = document.getElementById("status-icon");
     const statusTitle = document.getElementById("status-title");
     const statusDetail = document.getElementById("status-detail");
+    const scanDelay = document.getElementById("scan-delay");
     const codeReader = new ZXing.BrowserQRCodeReader();
     let scanningEnabled = false;
+    const delayStorageKey = "oktoberfest-scanner-delay-ms";
+
+    function loadScanDelay() {
+      try {
+        const savedDelay = localStorage.getItem(delayStorageKey);
+        if (savedDelay && scanDelay.querySelector(`option[value="${savedDelay}"]`)) {
+          scanDelay.value = savedDelay;
+        }
+      } catch (error) {
+        console.warn("Scanpause konnte nicht geladen werden", error);
+      }
+    }
+
+    function getScanDelay() {
+      return Number(scanDelay.value) || 1500;
+    }
+
+    scanDelay.addEventListener("change", () => {
+      try {
+        localStorage.setItem(delayStorageKey, scanDelay.value);
+      } catch (error) {
+        console.warn("Scanpause konnte nicht gespeichert werden", error);
+      }
+    });
+
+    loadScanDelay();
 
     function setStatus(type, icon, title, detail) {
       status.className = type;
@@ -356,7 +413,7 @@
             setTimeout(() => {
               setStatus("", "⌗", "Bereit zum Scannen", "Nächstes Ticket in den Rahmen halten");
               scanningEnabled = true;
-            }, 1700);
+            }, getScanDelay());
           });
       }
     })
