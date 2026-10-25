@@ -28,7 +28,7 @@ from config import BASE_PATH, PORT, URL
 load_dotenv()
 
 DB = os.getenv("TICKETS_DB_PATH", f"{BASE_PATH}/tickets.db")
-SCANNER_VERSION = "2026-10-24.1"
+SCANNER_VERSION = "2026-10-25.1"
 MUSIC_REQUEST_STATUSES = {"new", "later", "played", "rejected"}
 GUEST_COOKIE_NAME = "oktoberfest_musikwunsch"
 MUSIC_REQUESTS_BEFORE_COOLDOWN = 3
@@ -413,6 +413,7 @@ def set_response_headers(response):
     no_store_endpoints = {
         "home",
         "scan",
+        "scan_count",
         "validate",
         "music_request_page",
         "submit_music_request",
@@ -976,7 +977,22 @@ def reset_tickets():
 
 @app.route("/scan")
 def scan():
-    return render_template("scan.html", scanner_version=SCANNER_VERSION)
+    scanned_count = get_db().execute(
+        "SELECT COUNT(*) FROM tickets WHERE scanned_at IS NOT NULL"
+    ).fetchone()[0]
+    return render_template(
+        "scan.html",
+        scanner_version=SCANNER_VERSION,
+        scanned_count=scanned_count,
+    )
+
+
+@app.route("/api/scan-count")
+def scan_count():
+    count = get_db().execute(
+        "SELECT COUNT(*) FROM tickets WHERE scanned_at IS NOT NULL"
+    ).fetchone()[0]
+    return jsonify(count=count)
 
 
 if __name__ == "__main__":

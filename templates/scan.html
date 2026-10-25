@@ -70,7 +70,7 @@
       left:0;
       right:0;
       display:grid;
-      grid-template-columns:auto minmax(0, 1fr) auto;
+      grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr);
       align-items:center;
       gap:12px;
       min-height:64px;
@@ -83,11 +83,28 @@
 
     .brand-logo {
       display:flex;
+      justify-self:start;
       width:112px;
       align-items:center;
     }
 
     .brand-logo img { display:block; width:100%; height:auto; }
+
+    #ticket-counter {
+      display:flex;
+      grid-column:2;
+      flex-direction:column;
+      align-items:center;
+      justify-self:center;
+      min-width:64px;
+      color:#142018;
+      font-variant-numeric:tabular-nums;
+      line-height:1;
+    }
+
+    #scanned-count { font-size:1.38rem; font-weight:850; }
+    #ticket-counter span { margin-top:3px; color:#68736c; font-size:.62rem; font-weight:760; letter-spacing:.04em; text-transform:uppercase; }
+
     .delay-control {
       display:flex;
       grid-column:3;
@@ -254,6 +271,10 @@
 <body data-scanner-version="{{ scanner_version }}">
   <header id="topbar" aria-label="Scanner-Einstellungen">
     <span class="brand-logo"><img src="/static/netzl-logo.svg" alt="Netzl Data Solutions"></span>
+    <div id="ticket-counter" aria-live="polite" aria-atomic="true">
+      <strong id="scanned-count">{{ scanned_count }}</strong>
+      <span>gescannt</span>
+    </div>
     <label class="delay-control" for="scan-delay">
       Pause
       <select id="scan-delay" aria-label="Zeit zwischen zwei Scans">
@@ -291,6 +312,7 @@
     const statusTitle = document.getElementById("status-title");
     const statusDetail = document.getElementById("status-detail");
     const scanDelay = document.getElementById("scan-delay");
+    const scannedCount = document.getElementById("scanned-count");
     const codeReader = new ZXing.BrowserQRCodeReader();
     let scanningEnabled = false;
     const delayStorageKey = "oktoberfest-scanner-delay-ms";
@@ -367,6 +389,10 @@
     }
 
     function showValidationResult(result) {
+      if (Number.isInteger(result.count)) {
+        scannedCount.textContent = result.count;
+      }
+
       if (result.status === "valid") {
         const count = result.count ? `Bereits eingescannt: ${result.count}` : "Einlass freigeben";
         setStatus("valid", "✓", "Ticket gültig", count);
@@ -388,6 +414,28 @@
         setStatus("invalid", "×", "Ungültiges Ticket", "Ticket bitte kontrollieren");
       }
     }
+
+    function refreshScanCount() {
+      fetch("/api/scan-count", { cache: "no-store" })
+        .then(response => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        })
+        .then(result => {
+          if (Number.isInteger(result.count)) {
+            scannedCount.textContent = result.count;
+          }
+        })
+        .catch(error => console.warn("Scan-Zähler konnte nicht aktualisiert werden", error));
+    }
+
+    setInterval(() => {
+      if (!document.hidden) refreshScanCount();
+    }, 5000);
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) refreshScanCount();
+    });
 
     codeReader.decodeFromVideoDevice(null, video, (result) => {
       if (result && scanningEnabled && isInsideScanWindow(result)) {

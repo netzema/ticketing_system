@@ -156,9 +156,12 @@ class MusicRequestAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         scanner = response.get_data(as_text=True)
 
-        self.assertEqual(response.headers["X-Scanner-Version"], "2026-10-24.1")
-        self.assertIn('data-scanner-version="2026-10-24.1"', scanner)
+        self.assertEqual(response.headers["X-Scanner-Version"], "2026-10-25.1")
+        self.assertIn('data-scanner-version="2026-10-25.1"', scanner)
         self.assertIn('id="topbar"', scanner)
+        self.assertIn('id="ticket-counter"', scanner)
+        self.assertIn('id="scanned-count">0</strong>', scanner)
+        self.assertIn('fetch("/api/scan-count"', scanner)
         self.assertIn('id="scan-delay"', scanner)
         self.assertIn('value="1500" selected', scanner)
         self.assertIn("oktoberfest-scanner-delay-ms", scanner)
@@ -172,6 +175,21 @@ class MusicRequestAppTests(unittest.TestCase):
         self.assertIn("justify-self:end", scanner)
         self.assertNotIn("DOMParser", scanner)
         self.assertNotIn("response.text()", scanner)
+
+    def test_scan_counter_api_tracks_validated_tickets(self):
+        initial = self.client.get("/api/scan-count")
+        self.assertEqual(initial.status_code, 200)
+        self.assertEqual(initial.get_json(), {"count": 0})
+
+        validated = self.client.get(
+            "/validate/ticket-1", headers={"Accept": "application/json"}
+        )
+        self.assertEqual(validated.status_code, 200)
+        self.assertEqual(validated.get_json()["count"], 1)
+
+        updated = self.client.get("/api/scan-count")
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.get_json(), {"count": 1})
 
     def test_guest_can_submit_and_duplicates_are_combined(self):
         first_client = music_app.app.test_client()
